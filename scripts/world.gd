@@ -2,6 +2,8 @@ extends Node3D
 const Geo = preload("res://scripts/geo.gd")
 const Data = preload("res://scripts/game_data.gd")
 var course_index = 0
+var theme = 0
+var wind_rotors: Array[Node3D] = []
 var course: Dictionary = Data.COURSES[0]
 const CHUNK_LENGTH = 40.0
 const CHUNK_COUNT = 27
@@ -25,34 +27,46 @@ func yaw_at(d: float) -> float:
 	return -atan(cos(d*c[1])*c[0]*c[1]+cos(d*c[3])*c[2]*c[3])
 
 func relative_position(lane: float, track_distance: float, player_distance: float) -> Vector3:
-	return Vector3(lane+center_at(track_distance)-center_at(player_distance),0,player_distance-track_distance)
+	return Vector3(lane+center_at(track_distance)-center_at(player_distance),height_at(track_distance)-height_at(player_distance),player_distance-track_distance)
 
 func build(map_index: int = 0) -> void:
 	for child in get_children(): child.free()
 	chunks.clear()
+	wind_rotors.clear()
 	spectators.clear()
 	course_index = clampi(map_index,0,Data.COURSES.size()-1)
 	course = Data.COURSES[course_index]
+	theme = course.get("theme",course_index)
 	rng.seed = 20260924+course_index*77
 	_environment()
 	road_mat = ShaderMaterial.new()
 	road_mat.shader = load("res://shaders/asphalt.gdshader")
+	road_mat.set_shader_parameter("wetness",0.8 if course.id=="storm" else 0.0)
 	road_mat.set_shader_parameter("grain_texture",load("res://assets/asphalt_noise.tres"))
-	road_mat.set_shader_parameter("base_tint",[Color("0c1014"),Color("242020"),Color("131e22"),Color("070b15")][course_index])
+	road_mat.set_shader_parameter("base_tint",[Color("0c1014"),Color("242020"),Color("131e22"),Color("070b15")][theme])
 	for i in CHUNK_COUNT:
 		var chunk = _chunk(i)
 		add_child(chunk)
 		chunks.append(chunk)
 	var ground_colors = [Color("172b42"),Color("8b5940"),Color("537a74"),Color("121527")]
-	var ground = Geo.box(self,Vector3(2600,1,2200),Vector3(0,-10,-700),Geo.mat(ground_colors[course_index],0.15,0.75))
+	var ground = Geo.box(self,Vector3(2600,1,2200),Vector3(0,-32,-700),Geo.mat(ground_colors[theme],0.15,0.75))
 	ground.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	for i in 12:
 		var height = rng.randf_range(60,180)
 		var pos = Vector3(-950+i*175,height/2-10,-950-rng.randf()*100)
-		var mountain = Geo.wedge(self,Vector3(rng.randf_range(170,330),height,170),pos,Geo.mat([Color("263746"),Color("a8694e"),Color("6a858a"),Color("172139")][course_index],0,1))
+		var mountain = Geo.wedge(self,Vector3(rng.randf_range(170,330),height,170),pos,Geo.mat([Color("263746"),Color("a8694e"),Color("6a858a"),Color("172139")][theme],0,1))
 		mountain.rotation.y = rng.randf_range(-0.3,0.3)
 		if course.id=="alpine":
 			Geo.wedge(self,Vector3(75,height*0.30,65),Vector3(pos.x,height*0.85-10,pos.z),Geo.mat(Color("dce9e7"),0,0.85))
+	if course.id=="storm":
+		environment.fog_density=0.0033
+		environment.fog_light_color=Color("73818e")
+		sun.light_energy=0.75
+	if course.id=="windfarm":
+		environment.sky.sky_material.sky_top_color=Color("448fa6")
+		environment.sky.sky_material.sky_horizon_color=Color("c7d7aa")
+		environment.fog_light_color=Color("a0b59d")
+	if course.id=="coast": environment.fog_light_color=Color("78a8b6")
 	finish_gate = _gate("FINISH",Color("b9f3ec"))
 	add_child(finish_gate)
 	_build_finish_festival()
@@ -63,8 +77,8 @@ func _environment() -> void:
 	environment.background_mode = Environment.BG_SKY
 	var sky = Sky.new()
 	var sm = ProceduralSkyMaterial.new()
-	sm.sky_top_color = [Color("0b233f"),Color("467c9e"),Color("488cab"),Color("04091d")][course_index]
-	sm.sky_horizon_color = [Color("bc7d73"),Color("e5b28a"),Color("c9e5eb"),Color("253967")][course_index]
+	sm.sky_top_color = [Color("0b233f"),Color("467c9e"),Color("488cab"),Color("04091d")][theme]
+	sm.sky_horizon_color = [Color("bc7d73"),Color("e5b28a"),Color("c9e5eb"),Color("253967")][theme]
 	sm.sky_curve = 0.17
 	sm.ground_bottom_color = Color("111d30")
 	sm.ground_horizon_color = sm.sky_horizon_color
@@ -80,7 +94,7 @@ func _environment() -> void:
 	environment.glow_intensity = 0.55
 	environment.glow_bloom = 0.07
 	environment.fog_enabled = true
-	environment.fog_light_color = [Color("687984"),Color("bb8868"),Color("b3ced3"),Color("17213b")][course_index]
+	environment.fog_light_color = [Color("687984"),Color("bb8868"),Color("b3ced3"),Color("17213b")][theme]
 	environment.fog_density = 0.0018
 	environment.fog_sky_affect = 0.16
 	var we = WorldEnvironment.new()
@@ -109,21 +123,25 @@ func _chunk(index: int) -> Node3D:
 	var white = Geo.mat(Color("aac0c7"),0.0,0.9)
 	var amber = Geo.mat(Color("ff8852"),0.0,0.5,2.0)
 	var cyan = Geo.mat(Color("73cbd7"),0.0,0.5,1.3)
-	Geo.box(n,Vector3(19.0,0.5,40.2),Vector3(0,-0.26,0),road_mat)
+	var surface=MeshInstance3D.new()
+	surface.name="RoadSurface"
+	n.add_child(surface)
 	for side in [-1,1]:
-		Geo.box(n,Vector3(1.0,0.3,40.2),Vector3(side*10,-0.10,0),concrete)
-		Geo.box(n,Vector3(0.12,0.015,40.2),Vector3(side*9.1,0.006,0),white)
-		Geo.box(n,Vector3(0.22,0.32,40.2),Vector3(side*10.2,0.83,0),steel)
-		Geo.box(n,Vector3(0.035,0.07,40.2),Vector3(side*10.05,0.92,0),cyan if side < 0 else amber)
-		for zz in [-16,-4,8]:
-			Geo.box(n,Vector3(0.22,0.92,0.22),Vector3(side*10.2,0.41,zz),steel)
-		# Highway light masts, emissive fixtures avoid dozens of shadow lights.
 		Geo.box(n,Vector3(0.16,8.5,0.16),Vector3(side*11,4.15,0),steel)
 		Geo.box(n,Vector3(2.8,0.12,0.2),Vector3(side*9.65,8.35,0),steel)
 		Geo.box(n,Vector3(1.25,0.08,0.32),Vector3(side*8.6,8.25,0),Geo.mat(Color("ffdda4"),0,0.5,4.0))
-	for lane in [-4.5,0.0,4.5]:
+	var cones=Node3D.new()
+	cones.name="WorkCones"
+	n.add_child(cones)
+	for side in [-1,1]:
 		for z in [-15,-5,5,15]:
-			Geo.box(n,Vector3(0.13,0.016,4.5),Vector3(lane,0.009,z),white)
+			var cone=Node3D.new()
+			cones.add_child(cone)
+			cone.set_meta("side",side)
+			cone.set_meta("z",z)
+			Geo.box(cone,Vector3(0.6,0.08,0.6),Vector3(0,0.04,0),Geo.mat(Color("1c2226")))
+			Geo.wedge(cone,Vector3(0.4,0.85,0.4),Vector3(0,0.5,0),Geo.mat(Color("ff9a41")))
+			Geo.box(cone,Vector3(0.27,0.12,0.27),Vector3(0,0.6,0),white)
 	if index % 6 == 0:
 		var labels = [course.en,"KEEP MOVING","PASS / LEFT",course.en,"NEXT SECTOR"]
 		var gate = _gate(labels[index%labels.size()],Color("75d9dd"))
@@ -143,12 +161,15 @@ func _chunk(index: int) -> Node3D:
 		Geo.box(bridge,Vector3(28,0.7,1.0),Vector3(0,29.7,0),bridge_mat)
 		bridge.visible = false
 	_make_scenery(n,index,amber,cyan,concrete)
+	for child in n.get_children():
+		if child.name not in ["RoadSurface","WorkCones"]:
+			child.set_meta("base_position",child.position)
 	return n
 
 func _make_scenery(n: Node3D, index: int, amber: Material, cyan: Material, concrete: Material) -> void:
 	for side in [-1,1]:
-		if course.id in ["harbor","neon"]:
-			for j in 2:
+		if course.id in ["harbor","neon","coast"]:
+			for j in (1 if course.id=="coast" else 2):
 				var height = rng.randf_range(15,80 if course.id=="neon" else 65)
 				var material = ShaderMaterial.new()
 				material.shader = load("res://shaders/building.gdshader")
@@ -158,7 +179,7 @@ func _make_scenery(n: Node3D, index: int, amber: Material, cyan: Material, concr
 				var b = Geo.box(n,Vector3(rng.randf_range(12,22),height,rng.randf_range(15,28)),Vector3(x,height/2-10,rng.randf_range(-17,17)),material)
 				b.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 				if index%3==0: Geo.box(n,Vector3(13,0.13,0.16),Vector3(x,height-9.5,0),amber if side>0 else cyan)
-		elif course.id=="canyon":
+		elif course.id in ["canyon","quarry"]:
 			for j in 3:
 				var h = rng.randf_range(10,35)
 				var x = side*(24+j*21+rng.randf()*8)
@@ -180,7 +201,29 @@ func _make_scenery(n: Node3D, index: int, amber: Material, cyan: Material, concr
 				for tier in 3:
 					var tree = Geo.wedge(n,Vector3(h*0.6-tier,h*0.6,h*0.6-tier),Vector3(x,h*0.40+tier*h*0.17-1,z),Geo.mat(Color("1e594a") if tier%2==0 else Color("36766a"),0,1))
 					tree.rotation.y = PI/4
-				Geo.sphere(n,1.8,Vector3(x+3,-0.5,z+4),Geo.mat(Color("bfceca"),0,1),Vector3(1.5,0.5,1))
+				Geo.sphere(n,1.8,Vector3(x+3,-0.5,z+4),Geo.mat(Color("899882") if course.id=="windfarm" else Color("bfceca"),0,1),Vector3(1.5,0.5,1))
+		if course.id=="windfarm" and index%2==0:
+			var tower=Node3D.new()
+			n.add_child(tower)
+			tower.position=Vector3(side*43,0,0)
+			Geo.cylinder(tower,0.85,38,Vector3(0,17,0),Geo.mat(Color("dfe7dd")))
+			var rotor=Node3D.new()
+			tower.add_child(rotor)
+			rotor.position=Vector3(0,36,0)
+			Geo.sphere(rotor,1.2,Vector3.ZERO,white_material())
+			for blade in 3:
+				var arm=Node3D.new()
+				rotor.add_child(arm)
+				arm.rotation.z=blade*TAU/3
+				Geo.wedge(arm,Vector3(1.3,17,0.4),Vector3(0,9,0),white_material())
+			wind_rotors.append(rotor)
+		if course.id=="quarry" and index%3==0:
+			Geo.box(n,Vector3(3,25,3),Vector3(side*28,9,0),Geo.mat(Color("daa14c")))
+			Geo.box(n,Vector3(30,1.5,1.6),Vector3(side*34,22,0),Geo.mat(Color("e4b65c")))
+		if course.id=="coast" and index%4==0:
+			var lighthouse=Geo.cylinder(n,2.1,20,Vector3(side*35,7,0),white_material())
+			Geo.cylinder(lighthouse,2.5,2,Vector3(0,11,0),Geo.mat(Color("ff805f")))
+			Geo.sphere(lighthouse,1.4,Vector3(0,13,0),Geo.mat(Color("ffe9ad"),0,0.5,3))
 		Geo.box(n,Vector3(1.4,11,1.4),Vector3(side*7,-5.8,0),concrete)
 	if course.id=="neon" and index%3==0:
 		var neon = Geo.mat(Color("b562ff"),0,0.5,4)
@@ -213,13 +256,18 @@ func update_track(distance: float, finish: float, time: float = 0.0) -> void:
 		var chunk = chunks[posmod(segment,CHUNK_COUNT)]
 		var d = segment*CHUNK_LENGTH
 		chunk.position = relative_position(0,d,distance)
-		chunk.rotation.y = yaw_at(d)
+		chunk.rotation = Vector3.ZERO
+		if chunk.get_meta("segment",-999999)!=segment:
+			_shape_chunk(chunk,d)
+			chunk.set_meta("segment",segment)
 		var sign_gate = chunk.get_node_or_null("SignGate")
 		if sign_gate: sign_gate.visible = absf(d-finish)>85
 		var bridge = chunk.get_node_or_null("Bridge")
 		if bridge: bridge.visible = d>=finish*0.66 and d<=finish+200
 	finish_gate.position = relative_position(0,finish,distance)
 	finish_gate.rotation.y = yaw_at(finish)
+	finish_gate.rotation.x = atan(slope_at(finish))
+	for rotor in wind_rotors: rotor.rotation.z=time*0.38
 	finish_gate.visible = finish-distance < 700 and finish-distance > -100
 	if finish_gate.visible:
 		for fan in spectators:
@@ -290,3 +338,160 @@ func _build_finish_festival() -> void:
 		finish_gate.add_child(banner)
 		var board=Geo.box(finish_gate,Vector3(8,1.2,0.08),banner.position+Vector3(side*0.05,0,0),platform)
 		board.rotation.y=side*PI/2
+
+func white_material() -> Material:
+	return Geo.mat(Color("d7e5df"),0.2,0.7)
+
+func height_at(d: float) -> float:
+	# Start and finish are level staging areas; all elevation is deterministic.
+	var ramp=smoothstep(160.0,340.0,d)*(1.0-smoothstep(course.length-400.0,course.length-180.0,d))
+	var amplitude=[0.0,7.0,14.0,2.5,19.0,12.0,8.0,24.0][course_index]
+	var base=amplitude*(0.65+0.45*sin(d*0.004)+0.2*sin(d*0.009))
+	var hump=0.0
+	if course_index>=4:
+		var period=[0,0,0,0,720,430,620,840][course_index]
+		var width=[0.0,0,0,0,200,180,165,240][course_index]
+		var peak=[0.0,0,0,0,12,9,10,14][course_index]
+		var t=fposmod(d-430.0,float(period))
+		if t<width: hump=peak*0.5*(1-cos(TAU*t/width))
+	return (base+hump)*ramp
+
+func slope_at(d: float) -> float:
+	return (height_at(d+0.1)-height_at(d-0.1))/0.2
+
+func road_half_width(d: float) -> float:
+	if course_index<4: return 9.5
+	var period=1000.0 if course.id=="quarry" else 1550.0
+	var t=fposmod(d-850.0,period)
+	var pinch=smoothstep(0.0,90.0,t)*(1-smoothstep(280.0,390.0,t))
+	var staging=smoothstep(300.0,500.0,d)*(1-smoothstep(course.length-500,course.length-350,d))
+	return 9.5-pinch*staging*(3.4 if course.id=="quarry" else 2.3)
+
+func surface_at(d: float) -> String:
+	if course.id=="storm": return "wet"
+	if course.id=="quarry" and d>350 and d<course.length-350 and fposmod(d,1050)<350: return "gravel"
+	return "asphalt"
+
+func grip_at(d: float) -> float:
+	return {"wet":0.70,"gravel":0.77,"asphalt":1.0}[surface_at(d)]
+
+func road_hint(d: float) -> String:
+	if road_half_width(d+65)<7.5: return "前方收窄 · 提前并线"
+	if slope_at(d+60)>0.12: return "前方上坡 · 高速冲顶会腾空"
+	if surface_at(d)=="gravel": return "碎石路段 · 降低速度稳住车身"
+	if surface_at(d)=="wet": return "湿滑路面 · 提前刹车"
+	return ""
+
+func _point(d: float, at: float, fraction: float, y: float) -> Vector3:
+	return Vector3(center_at(at)-center_at(d)+road_half_width(at)*fraction,height_at(at)-height_at(d)+y,d-at)
+
+func _ribbon(st: SurfaceTool, d: float, x1: float, x2: float, y: float, dashed: bool = false) -> void:
+	for step in 16:
+		if dashed and step%4>=2: continue
+		var a=d-20+step*2.5
+		var b=a+2.5
+		var points=[_point(d,a,x1,y),_point(d,b,x1,y),_point(d,b,x2,y),_point(d,a,x2,y)]
+		for index in [0,1,2,0,2,3]:
+			st.set_uv(Vector2(points[index].x,points[index].z)*0.2)
+			st.add_vertex(points[index])
+
+func _shape_chunk(chunk: Node3D, d: float) -> void:
+	var mesh=ArrayMesh.new()
+	var st=SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	_ribbon(st,d,-1,1,-0.01)
+	st.generate_normals()
+	st.set_material(road_mat if surface_at(d)!="gravel" else Geo.mat(Color("766653"),0,1))
+	st.commit(mesh)
+	st=SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for x in [-0.96,0.96]: _ribbon(st,d,x-0.007,x+0.007,0.006)
+	for x in [-0.475,0.0,0.475]: _ribbon(st,d,x-0.007,x+0.007,0.009,true)
+	st.generate_normals()
+	st.set_material(white_material())
+	st.commit(mesh)
+	st=SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for side in [-1,1]:
+		_ribbon(st,d,side*1.00,side*1.07,-0.06)
+		_ribbon(st,d,side*1.075-0.013,side*1.075+0.013,0.85)
+	st.generate_normals()
+	var rail=Geo.mat(Color("526c78"),0.5,0.65)
+	rail.cull_mode=BaseMaterial3D.CULL_DISABLED
+	st.set_material(rail)
+	st.commit(mesh)
+	if course.id not in ["harbor","neon"]:
+		st=SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		_ribbon(st,d,-16,-1.09,-2.5)
+		if course.id!="coast": _ribbon(st,d,1.09,16,-2.5)
+		st.generate_normals()
+		var earth=Color("ad7950") if course.id in ["canyon","quarry"] else Color("526c47")
+		if course.id in ["alpine","storm"]: earth=Color("5f827c")
+		st.set_material(Geo.mat(earth,0,0.95))
+		st.commit(mesh)
+	chunk.get_node("RoadSurface").mesh=mesh
+	for child in chunk.get_children():
+		if child.has_meta("base_position"):
+			var p: Vector3=child.get_meta("base_position")
+			child.position=p+Vector3(center_at(d-p.z)-center_at(d),height_at(d-p.z)-height_at(d),0)
+	var cones=chunk.get_node("WorkCones")
+	cones.visible=road_half_width(d)<9.4
+	if cones.visible:
+		for cone in cones.get_children():
+			var at=d-float(cone.get_meta("z"))
+			cone.position=_point(d,at,float(cone.get_meta("side"))*0.98,0)
+
+func traffic_vehicle(spec: Dictionary, color: Color) -> Node3D:
+	var id=spec.id
+	if id in ["sedan","hatch","suv","taxi","van"]:
+		var n=car(Color("efc14a") if id=="taxi" else color,id in ["van","suv"])
+		n.scale=Vector3(spec.width/2.22,spec.height/(2.44 if id=="suv" else (2.32 if id=="van" else (2.0 if id=="taxi" else 1.75))),spec.length/4.1)
+		if id=="taxi":
+			Geo.box(n,Vector3(0.65,0.23,0.38),Vector3(0,1.85,0),Geo.mat(Color("fff2c1"),0,0.7,1))
+		elif id=="suv":
+			for side in [-1,1]: Geo.box(n,Vector3(0.08,0.08,2.2),Vector3(side*0.7,2.38,0),Geo.mat(Color("18212a")))
+		return n
+	var n=Node3D.new()
+	var paint=Geo.mat(color,0.45,0.4)
+	var steel=Geo.mat(Color("84959b"),0.7,0.3)
+	var dark=Geo.mat(Color("16212b"),0.2,0.8)
+	var glass=Geo.mat(Color("2c5267"),0.7,0.2)
+	var length: float=spec.length
+	var width: float=spec.width
+	var front=-length/2.0
+	var pickup=id=="pickup"
+	var cab_height=1.1 if pickup else 2.25
+	Geo.box(n,Vector3(width,0.45,length),Vector3(0,0.72,0),dark)
+	Geo.box(n,Vector3(width*0.95,cab_height,2.1),Vector3(0,1.0+cab_height/2,front+1.15),paint)
+	Geo.box(n,Vector3(width*0.8,cab_height*0.42,0.04),Vector3(0,1.1+cab_height*0.64,front+0.08),glass)
+	for side in [-1,1]:
+		Geo.box(n,Vector3(0.05,cab_height*0.4,0.9),Vector3(side*width*0.481,1.1+cab_height*0.64,front+0.85),glass)
+		Geo.box(n,Vector3(0.45,0.18,0.06),Vector3(side*width*0.3,1.1,front-0.025),Geo.mat(Color("d5efff"),0,0.5,3))
+		Geo.box(n,Vector3(0.4,0.18,0.06),Vector3(side*width*0.3,0.95,length/2),Geo.mat(Color("ff4343"),0,0.5,3))
+		var axles=[front+1.15,length/2-1.15] if pickup else [front+1.3,length/2-2.0,length/2-0.7]
+		if id=="semi": axles.append(front+3.7)
+		for z in axles:
+			var wheel=Geo.cylinder(n,0.43 if pickup else 0.55,0.28,Vector3(side*(width/2-0.1),0.43 if pickup else 0.55,z),dark)
+			wheel.rotation.z=PI/2
+			var hub=Geo.cylinder(n,0.25,0.30,Vector3(side*(width/2-0.1),0.43 if pickup else 0.55,z),steel)
+			hub.rotation.z=PI/2
+	var cargo_length=length-2.7
+	if pickup:
+		Geo.box(n,Vector3(width,0.15,cargo_length),Vector3(0,1.0,1.2),paint)
+		for side in [-1,1]: Geo.box(n,Vector3(0.1,0.65,cargo_length),Vector3(side*(width/2-0.05),1.35,1.2),paint)
+		Geo.box(n,Vector3(width,0.65,0.1),Vector3(0,1.35,length/2-0.05),paint)
+	elif id=="tanker":
+		var tank=Geo.cylinder(n,width*0.48,cargo_length,Vector3(0,2.35,1.3),steel)
+		tank.rotation.x=PI/2
+		for z in [0.0,2.8]:
+			Geo.box(n,Vector3(0.5,0.14,0.55),Vector3(0,3.63,z),dark)
+		for side in [-1,1]: Geo.box(n,Vector3(0.07,0.15,cargo_length),Vector3(side*width*0.49,2.4,1.3),Geo.mat(Color("eab761")))
+	else:
+		Geo.box(n,Vector3(width,spec.height-1.12,cargo_length),Vector3(0,(spec.height+1.12)/2,1.3),paint)
+		for side in [-1,1]:
+			for z in range(int(cargo_length*2)):
+				Geo.box(n,Vector3(0.045,spec.height-1.4,0.045),Vector3(side*width/2,(spec.height+1.12)/2,front+2.7+z*0.5),steel)
+		Geo.box(n,Vector3(width*0.9,spec.height-1.4,0.04),Vector3(0,(spec.height+1.12)/2,length/2+0.02),dark)
+		for x in [-0.25,0.25]: Geo.box(n,Vector3(0.07,spec.height-1.5,0.05),Vector3(x,(spec.height+1.12)/2,length/2+0.05),steel)
+	return n

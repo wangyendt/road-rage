@@ -1,5 +1,6 @@
 extends Node
 var engine: AudioStreamPlayer
+var airflow: AudioStreamPlayer
 var siren: AudioStreamPlayer
 var crowd: AudioStreamPlayer
 var music: AudioStreamPlayer
@@ -15,7 +16,7 @@ var siren_pitch = 1.0
 func _ready() -> void:
 	AudioServer.set_bus_layout(load("res://assets/default_bus_layout.tres"))
 	if DisplayServer.get_name()=="headless": return
-	for key in ["hit","crash","swing","nitro","click","count","go","pickup","finish","defeat"]:
+	for key in ["hit","crash","swing","nitro","click","count","go","pickup","finish","defeat","landing"]:
 		sounds[key] = load("res://assets/audio/"+key+".wav")
 	for i in 12:
 		var p = AudioStreamPlayer.new()
@@ -26,6 +27,7 @@ func _ready() -> void:
 	music = _loop("music","Music",-7)
 	siren = _loop("siren","SFX",-80)
 	crowd = _loop("crowd","SFX",-80)
+	airflow = _loop("airflow","SFX",-80)
 
 func _loop(key: String, bus_name: String, volume: float) -> AudioStreamPlayer:
 	var p = AudioStreamPlayer.new()
@@ -60,7 +62,7 @@ func update_audio(dt: float, speed: float, boost: bool, racing: bool) -> void:
 	AudioServer.set_bus_volume_db(0,linear_to_db(maxf(0.001,master_volume))-4.0)
 
 func shutdown() -> void:
-	for p in [siren,crowd]:
+	for p in [siren,crowd,airflow]:
 		if p:
 			p.stop()
 			p.stream=null
@@ -86,3 +88,9 @@ func update_world_audio(remaining: float, pursuit: float, racing: bool, dt: floa
 	siren.volume_db=linear_to_db(maxf(0.0001,siren_gain*0.6))
 	siren.pitch_scale=siren_pitch
 	crowd.volume_db=linear_to_db(maxf(0.0001,(1-clampf(absf(remaining)/300,0,1))*0.75)) if racing else -80
+
+func update_air_audio(dt: float, speed: float, airborne: bool) -> void:
+	if not airflow: return
+	var gain=clampf(speed/130.0,0,1)*0.75 if airborne else 0.0
+	airflow.volume_linear=lerpf(airflow.volume_linear,gain,1-exp(-dt*5))
+	airflow.pitch_scale=0.85+speed/300.0

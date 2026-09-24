@@ -78,6 +78,25 @@ func build(color: Color, player: bool = false, shape: int = 0) -> void:
 		Geo.wedge(chassis,Vector3(0.95,0.9,1.7),Vector3(0,1.14,-0.38),shell)
 		for side in [-1,1]: Geo.box(chassis,Vector3(0.055,0.35,0.08),Vector3(side*0.35,1.52,0.98),dark)
 		Geo.box(chassis,Vector3(1.45,0.09,0.36),Vector3(0,1.71,0.98),shell)
+	elif shape==4:
+		Geo.wedge(chassis,Vector3(0.6,0.12,0.95),Vector3(0,1.17,-0.85),shell)
+		Geo.box(chassis,Vector3(0.56,0.68,0.08),Vector3(0,1.8,-0.73),Geo.mat(Color("537d84"),0.5,0.3))
+		for side in [-1,1]: Geo.link(chassis,Vector3(side*0.3,0.48,-0.9),Vector3(side*0.3,1.57,-0.6),0.12,steel)
+	elif shape==5:
+		Geo.box(chassis,Vector3(0.7,0.67,1.2),Vector3(0,0.95,0.05),shell)
+		for side in [-1,1]:
+			for z in [-0.3,0.0,0.3]: Geo.box(chassis,Vector3(0.02,0.4,0.08),Vector3(side*0.36,0.99,z),light)
+	elif shape==6:
+		for side in [-1,1]:
+			Geo.box(chassis,Vector3(0.46,0.6,0.8),Vector3(side*0.55,1.05,0.65),shell)
+			Geo.box(chassis,Vector3(0.48,0.06,0.82),Vector3(side*0.55,1.36,0.65),steel)
+		Geo.box(chassis,Vector3(0.75,0.78,0.08),Vector3(0,1.83,-0.8),Geo.mat(Color("456573"),0.6,0.25))
+	elif shape==7:
+		Geo.wedge(chassis,Vector3(0.96,0.8,2.1),Vector3(0,1.12,-0.48),shell)
+		for side in [-1,1]:
+			Geo.wedge(chassis,Vector3(0.62,0.08,0.53),Vector3(side*0.6,1.2,-0.65),dark)
+			Geo.box(chassis,Vector3(0.035,0.06,1.7),Vector3(side*0.44,1.15,-0.25),light)
+		Geo.box(chassis,Vector3(1.35,0.08,0.32),Vector3(0,1.7,0.95),shell)
 	# Rider: articulated jacket, boots, helmet, and swinging baton.
 	rider = Node3D.new()
 	chassis.add_child(rider)

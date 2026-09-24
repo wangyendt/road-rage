@@ -11,7 +11,7 @@ const ORANGE = Color("ff8257")
 const CYAN = Color("8be7ec")
 var game: Node
 var title_font: SystemFont
-var body_font: SystemFont
+var body_font: Font
 var number_font: SystemFont
 var buttons: Array[Dictionary] = []
 var selected = 0
@@ -25,11 +25,15 @@ func _ready() -> void:
 	title_font = SystemFont.new()
 	title_font.font_names = PackedStringArray(["DIN Condensed","Arial Narrow","sans-serif"])
 	title_font.font_weight = 800
-	body_font = SystemFont.new()
-	body_font.font_names = PackedStringArray(["PingFang SC","Noto Sans CJK SC","Microsoft YaHei","sans-serif"])
+	var chinese=FontVariation.new()
+	chinese.base_font=load("res://assets/fonts/NotoSansSC.ttf")
+	chinese.variation_opentype={TextServerManager.get_primary_interface().name_to_tag("wght"):450.0}
+	body_font=chinese
+	title_font.fallbacks=[body_font]
 	number_font = SystemFont.new()
 	number_font.font_names = PackedStringArray(["DIN Alternate","Arial","sans-serif"])
 	number_font.font_weight = 700
+	number_font.fallbacks=[body_font]
 	mouse_filter = Control.MOUSE_FILTER_STOP
 
 func _gui_input(event: InputEvent) -> void:
@@ -153,6 +157,10 @@ func _menu() -> void:
 	_button("garage","车库 / 摩托商店",Rect2(1040,350,327,57),true,"SHOP")
 
 func _race(interactive: bool = true) -> void:
+	if game.world.course.id=="storm" and game.state=="race":
+		for i in 44:
+			var rain=Vector2(fmod(i*173.0+game.total_time*75,1440),fmod(i*139.0+game.total_time*610,900))
+			draw_line(rain,rain+Vector2(-5,23),Color(0.70,0.86,1,0.13),1,true)
 	# Peripheral speed streaks leave the road and collision cues unobstructed.
 	if game.boost_active and game.state == "race":
 		for i in 25:
@@ -191,7 +199,7 @@ func _race(interactive: bool = true) -> void:
 	var c = Vector2(1274,755)
 	draw_circle(c,100,Color(0.04,0.09,0.15,0.83))
 	draw_arc(c,88,PI*0.72,PI*2.28,65,Color("334c5a"),4,true)
-	draw_arc(c,88,PI*0.72,PI*0.72+PI*1.56*game.speed/99,65,ORANGE if game.boost_active else CYAN,5,true)
+	draw_arc(c,88,PI*0.72,PI*0.72+PI*1.56*clampf(game.speed/game.active_bike.boost,0,1),65,ORANGE if game.boost_active else CYAN,5,true)
 	for i in 21:
 		var a = PI*.72+PI*1.56*i/20
 		var dir = Vector2(cos(a),sin(a))
@@ -205,6 +213,12 @@ func _race(interactive: bool = true) -> void:
 		_text("连击",Vector2(1300,282),16,WHITE)
 		var fraction = game.combo_time/5
 		draw_line(Vector2(1280,300),Vector2(1280+90*fraction,300),ORANGE,3,true)
+	if game.ride.airborne and game.ride.height>0.3 and game.player.recovery_time<=0:
+		_panel(Rect2(545,663,350,85),Color(0.03,0.10,0.16,0.82),8,CYAN)
+		_center("AIRBORNE  /  腾空",Vector2(720,693),23,CYAN,number_font)
+		_center("离地 %.1fm   ·   %.1fs"%[game.ride.height,game.ride.air_time],Vector2(720,729),20,WHITE)
+	elif not game.world.road_hint(game.distance).is_empty():
+		_center(game.world.road_hint(game.distance),Vector2(720,741),19,ORANGE)
 	_draw_rival_markers()
 	_panel(Rect2(308,111,187,47),Color(0.04,0.09,0.15,0.86),6)
 	_text("钱包  $%d"%game.economy.cash,Vector2(320,141),18,CYAN,number_font)
@@ -301,7 +315,7 @@ func _help() -> void:
 		_text(rows[i][1],Vector2(480,y),18,MUTED)
 		_text(rows[i][2],Vector2(1115,y),17,CYAN)
 	_text("赢法",Vector2(185,704),22,ORANGE)
-	_text("四个场景，最多 15 名 AI。摔车后会自动起身、找车，仍有机会追回。",Vector2(270,704),18,WHITE)
+	_text("八个场景，最多 15 名 AI。冲坡会腾空，刹车过顶更稳；摔车后自动找车。",Vector2(270,704),18,WHITE)
 	_text("青色圆环补氮气，绿色十字修装甲；地图与后视镜可在设置中开关。",Vector2(270,740),17,MUTED)
 	_button("back","准备好了",Rect2(180,791,275,57),true,"ESC")
 
@@ -336,6 +350,7 @@ func _results() -> void:
 		_text("比赛奖金 $%d  /  抵扣欠款 $%d  /  实际入账 $%d"%[Motion.count(game.race_income.gross,t,0.4,1.0),Motion.count(game.race_income.debt_paid,t,0.4,1.0),Motion.count(game.race_income.net,t,0.4,1.0)],Vector2(173,613),22,CYAN)
 	_text("钱包 $%d   ·   待缴罚款 $%d   ·   奖金用于购买新摩托"%[game.economy.cash,game.economy.debt],Vector2(173,652),18,MUTED)
 	_text("脱逃  %02d"%game.police.escapes,Vector2(1027,448),19,CYAN)
+	_text("飞跃 %02d  /  最远 %.0fm"%[game.jumps,game.best_jump],Vector2(969,353),16,CYAN)
 	# Controls keep stable hitboxes throughout the entrance animation.
 	content_alpha=1
 	draw_set_transform(ui_offset,0,Vector2.ONE*ui_scale)
@@ -398,9 +413,11 @@ func _setup() -> void:
 	_shade(0.86)
 	_text("BUILD YOUR RACE",Vector2(72,119),57,WHITE,title_font)
 	_text("赛前设置  /  选择路线、对手与挑战等级",Vector2(74,160),22,CYAN)
-	for i in Data.COURSES.size():
+	for slot in 4:
+		var i=game.course_page*4+slot
+		if i>=Data.COURSES.size(): break
 		var course = Data.COURSES[i]
-		var rect = Rect2(72+(i%2)*391,205+int(i/2)*233,369,210)
+		var rect = Rect2(72+(slot%2)*391,205+int(slot/2)*233,369,210)
 		var focused = _hotspot("course:%d"%i,rect)
 		_panel(rect,Color(0.045,0.10,0.16,0.94),8,course.color if game.race_options.course==i or focused else Color("314653"))
 		_text(course.en,rect.position+Vector2(20,38),27,course.color,title_font)
@@ -422,6 +439,9 @@ func _setup() -> void:
 	_button("level_plus","+",Rect2(1260,440,65,50))
 	_text(Data.LEVEL_NAMES[game.race_options.difficulty-1],Vector2(920,530),23,ORANGE)
 	_paragraph(Data.LEVEL_DESCRIPTIONS[game.race_options.difficulty-1],Vector2(920,567),400,16,MUTED)
+	_button("courses_prev","← 上一页",Rect2(900,670,145,44))
+	_text("%d / %d"%[game.course_page+1,ceili(Data.COURSES.size()/4.0)],Vector2(1074,700),20,CYAN,number_font)
+	_button("courses_next","更多地图 →",Rect2(1180,670,184,44))
 	_text("动态竞争：不瞬移、不锁死名次。落后可追回，领先也要防守。",Vector2(76,697),18,MUTED)
 	_button("race_begin","开始竞赛",Rect2(72,748,360,65),true,"GO  →")
 	_button("roster","查看车手",Rect2(456,748,260,65))
@@ -593,9 +613,11 @@ func _garage() -> void:
 	_text("摩托商店 / 已拥有的车辆可以免费切换",Vector2(73,156),21,CYAN)
 	_text("钱包 $%d"%game.economy.cash,Vector2(1020,110),29,ORANGE,number_font)
 	_text("待缴罚款 $%d"%game.economy.debt,Vector2(1020,148),18,MUTED)
-	for i in game.Economy.BIKES.size():
+	for slot in 4:
+		var i=game.bike_page*4+slot
+		if i>=game.Economy.BIKES.size(): break
 		var bike=game.Economy.BIKES[i]
-		var x=72+i*328
+		var x=72+slot*328
 		var selected_bike=game.economy.equipped==bike.id
 		_panel(Rect2(x,204,306,492),Color("122333"),9,bike.color if selected_bike else Color("304554"))
 		_text(bike.tag,Vector2(x+18,238),15,bike.color,number_font)
@@ -609,13 +631,19 @@ func _garage() -> void:
 		draw_line(Vector2(x+190,345),Vector2(x+237,367),WHITE,7,true)
 		draw_colored_polygon(PackedVector2Array([Vector2(x+88,324),Vector2(x+125,299),Vector2(x+172,326),Vector2(x+252,316),Vector2(x+219,347),Vector2(x+114,352)]),bike.color)
 		if i==2: draw_rect(Rect2(x+137,331,62,30),bike.color.darkened(0.25))
-		if i==3: draw_line(Vector2(x+218,300),Vector2(x+270,300),bike.color,7,true)
+		if i in [4,6]: draw_line(Vector2(x+95,315),Vector2(x+112,291),CYAN,6,true)
+		if i==5: draw_rect(Rect2(x+127,323,74,27),bike.color.darkened(0.4))
+		if i==6: draw_rect(Rect2(x+199,330,55,40),bike.color.darkened(0.3))
+		if i in [3,7]: draw_line(Vector2(x+218,300),Vector2(x+270,300),bike.color,7,true)
 		_text("极速 / 氮气  %d / %d km/h"%[bike.speed*3.6,bike.boost*3.6],Vector2(x+18,426),16,WHITE)
 		_text("加速 %d   操控 %.1f"%[bike.accel,bike.handling],Vector2(x+18,459),17,MUTED)
 		_text("受伤倍率  %.0f%%"%(bike.armor*100),Vector2(x+18,491),17,MUTED)
 		_paragraph(bike.desc,Vector2(x+18,526),268,17,MUTED)
 		var owned=bike.id in game.economy.owned
 		_button("bike:"+bike.id,"驾驶中" if selected_bike else ("换上这台" if owned else "购买 $%d"%bike.price),Rect2(x+17,620,272,53),selected_bike)
+	_button("bikes_prev","← 上一页",Rect2(846,817,156,55))
+	_text("%d / %d"%[game.bike_page+1,ceili(game.Economy.BIKES.size()/4.0)],Vector2(1030,851),22,CYAN,number_font)
+	_button("bikes_next","更多摩托 →",Rect2(1141,817,220,55))
 	_text(game.garage_message,Vector2(76,739),20,CYAN)
 	_text("名次越高，奖金越多；难度与参赛人数影响奖金。被捕退赛无奖金，欠款从后续奖金优先扣除。",Vector2(76,778),17,MUTED)
 	_button("back","返回",Rect2(74,817,260,55),true,"ESC")

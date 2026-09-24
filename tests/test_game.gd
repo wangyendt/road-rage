@@ -111,7 +111,7 @@ func run() -> void:
 	check(game.health==77 and game.speed<50,"traffic collision damages and slows bike")
 	fresh()
 	game.speed = 74
-	game._spawn_traffic(-4.1,2.1)
+	game._spawn_traffic(-4.1,2.1,"sedan")
 	step(1)
 	check(game.near_misses==1 and game.score==100,"close safe overtake earns near-miss bonus")
 	fresh()

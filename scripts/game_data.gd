@@ -4,7 +4,12 @@ const COURSES = [
 	{"id":"harbor","name":"港湾高架","en":"HARBOR RUN","length":5400.0,"subtitle":"落日海湾 / 跨海桥梁","description":"宽阔高架与长直道，适合贴身缠斗和氮气超车。","color":Color("ffad78"),"curve":[31.0,0.0017,12.0,0.0039],"traffic":1.0},
 	{"id":"canyon","name":"赤岩峡谷","en":"RED ROCK PASS","length":4800.0,"subtitle":"荒漠峡谷 / 砂岩山脊","description":"蜿蜒峡谷与低矮岩壁，连续转向考验走线。","color":Color("ec9c59"),"curve":[72.0,0.0012,31.0,0.0032],"traffic":0.78},
 	{"id":"alpine","name":"雪岭林道","en":"ALPINE RIDGE","length":5200.0,"subtitle":"高山针叶林 / 远眺雪峰","description":"冷色山地、大片针叶林和长弯道，保持节奏最重要。","color":Color("a6e4d4"),"curve":[90.0,0.0010,22.0,0.0028],"traffic":0.65},
-	{"id":"neon","name":"霓虹都市","en":"NEON AFTERHOURS","length":6200.0,"subtitle":"夜间高速 / 霓虹天际线","description":"灯光隧廊与密集车流；利用后视镜防住追击。","color":Color("c8a4ff"),"curve":[25.0,0.0022,18.0,0.0044],"traffic":1.22}
+	{"id":"neon","name":"霓虹都市","en":"NEON AFTERHOURS","length":6200.0,"subtitle":"夜间高速 / 霓虹天际线","description":"灯光隧廊与密集车流；利用后视镜防住追击。","color":Color("c8a4ff"),"curve":[25.0,0.0022,18.0,0.0044],"traffic":1.22},
+	{"id":"coast","name":"海崖天际线","en":"COASTLINE FLIGHT","length":6800.0,"subtitle":"海崖起伏 / 跨谷飞跃","description":"掠过海岸与石拱。高速越过坡顶会离地，落地前留好走线。","color":Color("64dcca"),"curve":[65.0,0.0018,18.0,0.006],"traffic":0.85,"theme":0},
+	{"id":"windfarm","name":"风车丘陵","en":"TURBINE HILLS","length":7200.0,"subtitle":"连绵丘陵 / 巨型风机","description":"连续波浪坡与风机群。长行程悬挂更适合反复腾空。","color":Color("d0e597"),"curve":[75.0,0.0014,20.0,0.0045],"traffic":0.8,"theme":2},
+	{"id":"quarry","name":"矿场运输线","en":"QUARRY EXPRESS","length":5800.0,"subtitle":"施工收窄 / 碎石坡道","description":"重卡、锥桶与碎石路交替出现；提前减速通过窄口。","color":Color("ffbf67"),"curve":[65.0,0.0021,28.0,0.005],"traffic":1.12,"theme":1},
+	{"id":"storm","name":"雨雾山脊","en":"STORM RIDGE","length":6600.0,"subtitle":"湿滑山路 / 急弯长坡","description":"冷雨中的高差山路，抓地力降低。坡顶加速前先看前方。","color":Color("90bced"),"curve":[88.0,0.0018,30.0,0.006],"traffic":0.75,"theme":3}
+
 ]
 const LEVEL_NAMES = ["新手巡游","轻松竞速","街头高手","职业对抗","传奇极限"]
 const LEVEL_DESCRIPTIONS = [

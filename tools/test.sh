@@ -22,5 +22,9 @@ grep -q 'PROGRESS_TEST_RESULTS passed=19 failed=0' "$ROOT/builds/test-logs/progr
 grep -q 'PURSUIT_TEST_RESULTS passed=30 failed=0' "$ROOT/builds/test-logs/pursuit.log"
 "$GODOT" --path "$ROOT" --script tests/test_feedback_ui.gd 2>&1 | tee "$ROOT/builds/test-logs/feedback-ui.log"
 grep -q 'FEEDBACK_UI_TEST_RESULTS passed=11 failed=0' "$ROOT/builds/test-logs/feedback-ui.log"
-if grep -E '^(SCRIPT ERROR:|ERROR:)' "$ROOT/builds/test-logs/"*.log; then exit 1; fi
-printf '\nAll 217 assertions passed.\n'
+"$GODOT" --headless --path "$ROOT" --script tests/test_terrain.gd 2>&1 | tee "$ROOT/builds/test-logs/terrain.log"
+grep -q 'TERRAIN_TEST_RESULTS passed=29 failed=0' "$ROOT/builds/test-logs/terrain.log"
+"$GODOT" --path "$ROOT" --script tests/test_terrain_ui.gd 2>&1 | tee "$ROOT/builds/test-logs/terrain-ui.log"
+grep -q 'TERRAIN_UI_TEST_RESULTS passed=16 failed=0' "$ROOT/builds/test-logs/terrain-ui.log"
+if grep -E '^(SCRIPT ERROR:|ERROR:)'  "$ROOT/builds/test-logs/"*.log; then exit 1; fi
+printf '\nAll 262 assertions passed.\n'

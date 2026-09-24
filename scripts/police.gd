@@ -123,7 +123,7 @@ func update(dt: float) -> void:
 		u.cooldown=maxf(0,u.cooldown-dt)
 		u.think-=dt
 		var recovering=game.player.recovery_time>0
-		var grounded=recovering and game.player.recovery_elapsed>=0.85
+		var grounded=recovering and game.ride.height<0.5 and game.player.recovery_elapsed>=0.85
 		if u.think<=0:
 			u.think=1.0
 			u.target_lane=game.lane
@@ -139,10 +139,11 @@ func update(dt: float) -> void:
 					u.target_lane=clampf(car.lane+(-3.0 if car.lane>0 else 3.0),-7.5,7.5)
 					status="警车被车流阻挡 · 趁机甩开"
 			u.speed=move_toward(u.speed,target,dt*(65 if target<u.speed else 30))
+		u.target_lane=clampf(u.target_lane,-game.world.road_half_width(u.distance+20)+1.5,game.world.road_half_width(u.distance+20)-1.5)
 		if not u.on_foot:
 			u.distance+=u.speed*dt
 			u.lane=move_toward(u.lane,u.target_lane,dt*2.2)
-		if not recovering and absf(game.distance-u.distance)<3.6 and absf(game.lane-u.lane)<1.6 and u.cooldown<=0:
+		if not recovering and game.ride.height<1.85 and absf(game.distance-u.distance)<3.6 and absf(game.lane-u.lane)<1.6 and u.cooldown<=0:
 			u.cooldown=6
 			game.take_damage(23,"警车撞击")
 			if game.player.recovery_time>0: u.speed*=0.15
@@ -171,6 +172,7 @@ func update(dt: float) -> void:
 func update_visual(u: Dictionary) -> void:
 	u.car.position=game.world.relative_position(u.lane,u.distance,game.distance)
 	u.car.rotation.y=game.world.yaw_at(u.distance)
+	u.car.rotation.x=atan(game.world.slope_at(u.distance))
 	u.red.visible=not u.retreat and fmod(game.total_time,0.28)<0.14
 	u.blue.visible=not u.retreat and not u.red.visible
 	u.officer.visible=u.on_foot
