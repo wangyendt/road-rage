@@ -1,0 +1,21 @@
+# Godot generated files
+.godot/
+/android/
+export_credentials.cfg
+
+# Local builds and credentials
+/builds/
+/exports/
+.env
+.env.*
+!.env.example
+*.p12
+*.pfx
+*.keystore
+
+# macOS and editors
+.DS_Store
+.AppleDouble/
+.idea/
+*.swp
+*.swo
