@@ -16,5 +16,7 @@ grep -q 'EXPANSION_UI_TEST_RESULTS passed=26 failed=0' "$ROOT/builds/test-logs/e
 grep -q 'CAREER_TEST_RESULTS passed=34 failed=0' "$ROOT/builds/test-logs/career.log"
 "$GODOT" --path "$ROOT" --script tests/test_career_ui.gd 2>&1 | tee "$ROOT/builds/test-logs/career-ui.log"
 grep -q 'CAREER_UI_TEST_RESULTS passed=12 failed=0' "$ROOT/builds/test-logs/career-ui.log"
+"$GODOT" --path "$ROOT" --script tests/test_progress.gd 2>&1 | tee "$ROOT/builds/test-logs/progress.log"
+grep -q 'PROGRESS_TEST_RESULTS passed=19 failed=0' "$ROOT/builds/test-logs/progress.log"
 if grep -E '^(SCRIPT ERROR:|ERROR:)' "$ROOT/builds/test-logs/"*.log; then exit 1; fi
-printf '\nAll 157 assertions passed.\n'
+printf '\nAll 176 assertions passed.\n'

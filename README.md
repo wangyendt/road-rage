@@ -1,4 +1,4 @@
-# ROAD RAGE · 极限狂飙 v3.0
+# ROAD RAGE · 极限狂飙 v3.1
 
 可从菜单玩到结算的 **3D 单机摩托竞速格斗游戏**。原创程序化模型、合成音效和电子配乐；Godot 4，面向 Apple Silicon Mac。
 
@@ -10,6 +10,14 @@
 - 构建目标 macOS 13+ / arm64；验证机器为 M1 Max、macOS 26.6、Godot 4.7.2。
 
 开始游戏后先选择场景、1–15 名 AI 和 1–5 级难度，再开始竞赛。
+
+## v3.1 公里数与全员数轴
+
+- 顶部显示已行驶公里数、距离终点公里数、全程长度及完成百分比，公里数保留三位小数（米级显示精度）。
+- 左侧所有车手共用同一公里刻度，每人独立一行：名次、头像、姓名、相对玩家差距、实际进度标记和剩余公里数。橙色菱形突出玩家。
+- 16 人同时起跑也不会合并或遮挡标记；倒地显示交叉标记，冲线显示终点圆环和“到达”。
+- 点击 AI 行查看精确的已行驶/剩余公里数、百分比和相对距离。资料页暂停比赛，数轴同步冻结。
+- 四条路线均使用自身实际长度；到达后固定 100%，不会出现负的剩余里程。
 
 ## v3 新功能
 
@@ -73,6 +81,7 @@ scripts/race_director.gd  有上限的双向非线性追赶
 scripts/controls.gd       InputMap、按键交换与保存
 scripts/economy.gd        奖金、钱包、罚款、购买与车型属性
 scripts/police.gd         警车追逐、警灯、下车抓捕
+scripts/race_progress.gd  公里数换算、全员进度与数轴定位
 scripts/audio.gd          音效、引擎、电子配乐
 scripts/fx.gd             火花与挥击弧光
 shaders/                 路面、窗户、屏幕效果
@@ -87,7 +96,7 @@ assets/                  原创音频、纹理、图标及许可
   --autoplay --ai=15 --level=5 --course=3 --quit-after=110
 ```
 
-测试脚本覆盖 157 项逻辑和真实渲染输入断言。详情见 `docs/QA.md`；策略说明见 `docs/DESIGN.md`。`--course=0..3` 对应上表顺序。
+测试脚本覆盖 176 项逻辑和真实渲染输入断言。详情见 `docs/QA.md`；策略说明见 `docs/DESIGN.md`。`--course=0..3` 对应上表顺序。
 
 构建需要已安装 Godot 与 Xcode 命令行工具，可用 `GODOT_BIN` 指定引擎。输出 `builds/Road Rage.app` 和 `builds/RoadRage-macOS-AppleSilicon.zip`。
 

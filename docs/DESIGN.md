@@ -50,3 +50,9 @@
 ## Career expansion
 
 See `CAREER.md` for the v3 finish festival, police pursuit, arrest/fine ledger, prize schedule and four-bike garage.
+
+## v3.1 里程情报
+
+比赛模拟仍以米连续积分。`race_progress.gd` 统一换算公里、剩余距离和比例，HUD 与档案不再各自计算。显示里程限制在起点和终点之间，冲线后车手继续滑行不会使数轴越界。
+
+数轴采用共用横坐标、多车手分行的布局：纵向排序代表名次，横坐标只代表从起点行驶的实际公里数。标记不人为横移避让，所有车手同里程时准确纵向对齐。这样既保留真实距离，也避免 16 人起跑时圆点与姓名堆叠。剩余公里和相对玩家的米数同时保留，玩家使用橙色菱形。

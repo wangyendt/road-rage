@@ -1,6 +1,7 @@
 extends Control
 ## Resolution-independent, keyboard/gamepad-accessible arcade interface.
 const Data = preload("res://scripts/game_data.gd")
+const Progress = preload("res://scripts/race_progress.gd")
 const Controls = preload("res://scripts/controls.gd")
 const INK = Color("101c2d")
 const WHITE = Color("e9f3f3")
@@ -163,17 +164,7 @@ func _race(interactive: bool = true) -> void:
 	_text("当前名次",Vector2(49,227),14,MUTED)
 	_text("%06d"%game.score,Vector2(49,280),33,WHITE,number_font)
 	_text("SCORE",Vector2(49,302),13,MUTED,number_font)
-	# Track progression, with actual sector boundaries.
-	var start = Vector2(350,54)
-	var w = 696.0
-	draw_line(start,start+Vector2(w,0),Color(0.4,0.55,0.63,0.55),4,true)
-	draw_line(start,start+Vector2(w*clampf(game.distance/game.track_length,0,1),0),CYAN,4,true)
-	for i in 4:
-		var pos = start+Vector2(w*i/3,0)
-		draw_circle(pos,4,CYAN if i*game.track_length/3<=game.distance else MUTED)
-	draw_circle(start+Vector2(w*clampf(game.distance/game.track_length,0,1),0),7,WHITE)
-	_text(game.world.course.en+" / LV.%d"%game.active_level,Vector2(350,86),14,MUTED,number_font)
-	_text("%.2f / %.2f KM"%[game.distance/1000,game.track_length/1000],Vector2(879,86),16,WHITE,number_font)
+	_distance_header()
 	_text(_time(game.elapsed),Vector2(1138,70),37,WHITE,number_font)
 	_text("RACE TIME",Vector2(1150,94),12,MUTED,number_font)
 	if interactive: _button("back","Ⅱ",Rect2(1350,32,52,46))
@@ -209,8 +200,8 @@ func _race(interactive: bool = true) -> void:
 		var fraction = game.combo_time/5
 		draw_line(Vector2(1280,300),Vector2(1280+90*fraction,300),ORANGE,3,true)
 	_draw_rival_markers()
-	_panel(Rect2(308,91,187,47),Color(0.04,0.09,0.15,0.86),6)
-	_text("钱包  $%d"%game.economy.cash,Vector2(320,121),18,CYAN,number_font)
+	_panel(Rect2(308,111,187,47),Color(0.04,0.09,0.15,0.86),6)
+	_text("钱包  $%d"%game.economy.cash,Vector2(320,141),18,CYAN,number_font)
 	_standings_board(interactive)
 	if game.settings.map: _minimap()
 	if game.settings.mirror: _rear_view()
@@ -333,6 +324,8 @@ func _results() -> void:
 	_button("retry","再来一场",Rect2(170,687,345,65),true,"R / ENTER")
 	_button("menu","返回主菜单",Rect2(539,687,300,65))
 	_button("garage","车库 / 换车",Rect2(863,687,300,65))
+	var km=Progress.measure(game.distance,game.track_length)
+	_text("本场里程 %.3f / %.3f km   ·   距终点 %.3f km   ·   完成 %.1f%%"%[km.travelled_km,km.total_km,km.remaining_km,km.percent],Vector2(173,790),18,CYAN)
 	_text("原创场景 · 原创合成音效与配乐 · 本地记录",Vector2(173,834),15,MUTED)
 
 func _time(value: float) -> String:
@@ -459,6 +452,8 @@ func _profile() -> void:
 		var r = game.rivals[p.id]
 		_text("本场：%d km/h  ·  氮气 %d%%  ·  摔车 %d 次  ·  有效攻击 %d 次"%[r.speed*3.6,r.nitro,r.crashes,r.attacks],Vector2(185,690),19,WHITE)
 		_text("状态："+(r.node.recovery_stage if r.node.recovery_time>0 else ("已冲线" if r.finished else "竞速中")),Vector2(185,726),18,p.color)
+		var km=Progress.measure(r.distance,game.track_length)
+		_text("已行驶 %.3f km / 剩余 %.3f km / 完成 %.1f%% / 与你相差 %+d m"%[km.travelled_km,km.remaining_km,km.percent,roundi(r.distance-game.distance)],Vector2(185,755),17,CYAN)
 	_button("back","返回车手列表",Rect2(184,780,310,58),true,"ESC")
 
 func _bindings() -> void:
@@ -474,25 +469,60 @@ func _bindings() -> void:
 	_button("back","返回",Rect2(120,781,250,57),true,"ESC")
 	_button("reset_keys","恢复默认按键",Rect2(396,781,290,57))
 
+func _distance_header() -> void:
+	var km=Progress.measure(game.distance,game.track_length)
+	_panel(Rect2(304,18,764,80),Color(0.035,0.08,0.14,0.9),7)
+	_text("已行驶",Vector2(321,39),13,MUTED)
+	_text("%.3f KM"%km.travelled_km,Vector2(321,72),31,WHITE,number_font)
+	_text("距终点",Vector2(525,39),13,MUTED)
+	_text("%.3f KM"%km.remaining_km,Vector2(525,72),31,CYAN,number_font)
+	_text("全程 %.2f KM / LV.%d"%[km.total_km,game.active_level],Vector2(740,40),15,MUTED,number_font)
+	_text("%.1f%%"%km.percent,Vector2(931,71),28,ORANGE,number_font)
+	var a=Vector2(322,86)
+	draw_line(a,a+Vector2(727,0),Color("304a59"),3,true)
+	draw_line(a,a+Vector2(727*km.fraction,0),ORANGE,3,true)
+	for i in 5: draw_line(a+Vector2(i*727.0/4,-3),a+Vector2(i*727.0/4,3),MUTED,1)
+
 func _standings_board(interactive: bool) -> void:
-	var rows = game.standings()
-	var height = 43+rows.size()*22
-	_panel(Rect2(32,334,243,height),Color(0.035,0.08,0.14,0.82),7)
-	_text("实时排名",Vector2(47,358),15,WHITE)
-	_text("差距 / m",Vector2(206,358),12,MUTED)
+	# A shared kilometre axis with one lane per rider: even 16 racers at the
+	# same distance remain individually identifiable without moving their dots.
+	var rows=Progress.field(game.standings(),game.track_length)
+	var axis_left=171.0
+	var axis_width=126.0
+	var height=85+rows.size()*20
+	_panel(Rect2(32,324,342,height),Color(0.035,0.08,0.14,0.92),7)
+	_text("全员赛程",Vector2(47,348),17,WHITE)
+	_text("剩余 KM",Vector2(311,348),11,MUTED)
+	_text("共同公里数轴 · 起点 → 终点",Vector2(47,372),12,MUTED)
+	for i in 3:
+		var x=axis_left+axis_width*i/2
+		_center("%.2f"%(game.track_length/1000*i/2),Vector2(x,391),10,CYAN,number_font)
+		draw_line(Vector2(x,398),Vector2(x,398+rows.size()*20),Color(0.3,0.5,0.6,0.22),1)
+	_text("差距 m",Vector2(129,391),10,MUTED)
+	draw_line(Vector2(axis_left,395),Vector2(axis_left+axis_width,395),MUTED,1,true)
 	for i in rows.size():
-		var r = rows[i]
-		var y = 370+i*22
-		if r.id==-1: draw_rect(Rect2(39,y-2,229,22),Color(1,0.48,0.3,0.18))
-		_text("%02d"%(i+1),Vector2(45,y+14),13,r.color,number_font)
+		var r=rows[i]
+		var y=400+i*20
+		if r.id==-1: draw_rect(Rect2(39,y-1,328,20),Color(1,0.48,0.3,0.16))
+		_text("%02d"%(i+1),Vector2(43,y+13),12,r.color,number_font)
 		if r.id>=0:
-			_avatar(r.id,Rect2(72,y,19,19))
-			if interactive: _hotspot("profile:%d"%r.id,Rect2(39,y-2,229,22))
-		else: draw_circle(Vector2(81,y+10),6,ORANGE)
-		_text(r.name,Vector2(99,y+14),15,r.color,number_font)
-		var gap = r.distance-game.distance
-		var text = "你" if r.id==-1 else ("冲线" if r.finished else ("倒地" if r.recovering else "%+d"%roundi(gap)))
-		_text(text,Vector2(209,y+14),12,WHITE if r.id==-1 else MUTED)
+			_avatar(r.id,Rect2(65,y,17,17))
+			if interactive: _hotspot("profile:%d"%r.id,Rect2(39,y-1,328,20))
+		else: draw_circle(Vector2(74,y+8),5,ORANGE)
+		_text(r.name,Vector2(87,y+13),14,r.color,number_font)
+		var gap_label="—" if r.id==-1 else "%+d"%roundi(r.distance-game.distance)
+		_text(gap_label,Vector2(165-number_font.get_string_size(gap_label,HORIZONTAL_ALIGNMENT_LEFT,-1,10).x,y+13),10,MUTED,number_font)
+		var x=Progress.axis_x(r.fraction,axis_left,axis_width)
+		draw_line(Vector2(axis_left,y+8),Vector2(axis_left+axis_width,y+8),Color("284352"),1,true)
+		draw_line(Vector2(axis_left,y+8),Vector2(x,y+8),r.color.darkened(0.2),2,true)
+		if r.id==-1:
+			draw_colored_polygon(PackedVector2Array([Vector2(x,y+2),Vector2(x+6,y+8),Vector2(x,y+14),Vector2(x-6,y+8)]),ORANGE)
+		else: draw_circle(Vector2(x,y+8),4,r.color)
+		if r.recovering:
+			draw_line(Vector2(x-4,y+4),Vector2(x+4,y+12),WHITE,1.5,true)
+			draw_line(Vector2(x-4,y+12),Vector2(x+4,y+4),WHITE,1.5,true)
+		if r.finished: draw_arc(Vector2(x,y+8),6,0,TAU,12,WHITE,1,true)
+		_text("到达" if r.finished else "%.3f"%r.remaining_km,Vector2(316,y+13),12,CYAN if r.finished else (WHITE if r.id==-1 else MUTED),number_font if not r.finished else body_font)
 
 func _minimap() -> void:
 	var rect = Rect2(1175,330,232,277)
