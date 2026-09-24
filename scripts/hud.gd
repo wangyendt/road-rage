@@ -66,6 +66,7 @@ func _draw() -> void:
 		"roster": _roster()
 		"profile": _profile()
 		"bindings": _bindings()
+		"garage": _garage()
 		"race", "countdown": _race()
 		"paused":
 			_race(false)
@@ -138,7 +139,11 @@ func _menu() -> void:
 	_text("1 FINISH LINE",Vector2(1234,159),17,WHITE,number_font)
 	_panel(Rect2(1102,757,266,85),Color(0.04,0.1,0.17,0.7),5)
 	_text("你的座驾",Vector2(1121,784),14,MUTED)
-	_text("RR–09 / INTERCEPTOR",Vector2(1121,819),25,WHITE,title_font)
+	_text(game.economy.bike().name,Vector2(1121,819),22,WHITE,title_font)
+	_panel(Rect2(1040,220,327,113),Color(0.04,0.1,0.17,0.9),8)
+	_text("可用余额  $%d"%game.economy.cash,Vector2(1060,263),26,CYAN,number_font)
+	_text("待缴罚款  $%d"%game.economy.debt,Vector2(1060,300),17,MUTED)
+	_button("garage","车库 / 摩托商店",Rect2(1040,350,327,57),true,"SHOP")
 
 func _race(interactive: bool = true) -> void:
 	# Peripheral speed streaks leave the road and collision cues unobstructed.
@@ -204,6 +209,8 @@ func _race(interactive: bool = true) -> void:
 		var fraction = game.combo_time/5
 		draw_line(Vector2(1280,300),Vector2(1280+90*fraction,300),ORANGE,3,true)
 	_draw_rival_markers()
+	_panel(Rect2(308,91,187,47),Color(0.04,0.09,0.15,0.86),6)
+	_text("钱包  $%d"%game.economy.cash,Vector2(320,121),18,CYAN,number_font)
 	_standings_board(interactive)
 	if game.settings.map: _minimap()
 	if game.settings.mirror: _rear_view()
@@ -215,6 +222,11 @@ func _race(interactive: bool = true) -> void:
 		_center(game.message_sub,Vector2(720,321),15,Color(0.9,0.96,0.96,a))
 	if game.elapsed<7 and game.state=="race" and game.message_time<=0:
 		_center("自动油门 · 靠近对手后，按 %s / %s 出击"%[game.controls.label("attack_left"),game.controls.label("attack_right")],Vector2(720,320),19,WHITE)
+	if not game.police.units.is_empty() and game.state in ["race","paused"]:
+		_panel(Rect2(480,563,480,71),Color(0.13,0.04,0.11,0.92),8,Color("ff687e"))
+		_center(game.police.status,Vector2(720,590),18,Color("ff95a0"))
+		_center("倒地被捕：罚款 $%d 并退赛"%(350+game.active_level*150),Vector2(720,614),15,WHITE)
+		if game.police.capture>0: draw_rect(Rect2(490,625,460*game.police.capture/0.65,4),ORANGE)
 	if game.player.recovery_time>0:
 		_panel(Rect2(475,660,490,96),Color(0.04,0.08,0.14,0.88),8)
 		_center(game.player.recovery_stage,Vector2(720,693),26,ORANGE)
@@ -297,8 +309,9 @@ func _results() -> void:
 	_shade(0.79)
 	var win = game.finish_reason=="finished"
 	var champ = win and game.final_rank==1
-	_text("RACE COMPLETE" if win else "RIDE ENDED",Vector2(168,135),56,WHITE,title_font)
-	_text("冠军属于你" if champ else ("漂亮冲线" if win else "下次，再快一点"),Vector2(168,191),34,ORANGE)
+	var busted=game.finish_reason=="busted"
+	_text("BUSTED" if busted else ("RACE COMPLETE" if win else "RIDE ENDED"),Vector2(168,135),56,WHITE,title_font)
+	_text("被警方截停 · 本场退赛" if busted else ("冠军属于你" if champ else ("漂亮冲线" if win else "下次，再快一点")),Vector2(168,191),34,ORANGE)
 	_text(game.world.course.name+" / "+game.world.course.en+"  ·  LV.%d"%game.active_level,Vector2(170,232),18,MUTED)
 	_panel(Rect2(170,275,1100,300),Color(0.04,0.09,0.15,0.9),12,Color("334c5a"))
 	_text("最终名次" if win else "比赛进度",Vector2(205,319),17,MUTED)
@@ -312,10 +325,14 @@ func _results() -> void:
 	_text("击倒  %02d"%game.takedowns,Vector2(515,533),21,WHITE)
 	_text("命中  %02d"%game.hits,Vector2(771,533),21,WHITE)
 	_text("擦身  %02d"%game.near_misses,Vector2(1027,533),21,WHITE)
-	_text("连击和击倒大幅加分；保住车体，冲线还有额外奖励。",Vector2(173,625),18,MUTED)
+	if busted:
+		_text("罚款 $%d  /  已扣 $%d  /  待缴 $%d"%[game.race_fine.gross,game.race_fine.paid,game.race_fine.unpaid],Vector2(173,613),23,ORANGE)
+	else:
+		_text("比赛奖金 $%d  /  抵扣欠款 $%d  /  实际入账 $%d"%[game.race_income.gross,game.race_income.debt_paid,game.race_income.net],Vector2(173,613),22,CYAN)
+	_text("钱包 $%d   ·   待缴罚款 $%d   ·   奖金用于购买新摩托"%[game.economy.cash,game.economy.debt],Vector2(173,652),18,MUTED)
 	_button("retry","再来一场",Rect2(170,687,345,65),true,"R / ENTER")
 	_button("menu","返回主菜单",Rect2(539,687,300,65))
-	_button("roster","车手档案",Rect2(863,687,300,65))
+	_button("garage","车库 / 换车",Rect2(863,687,300,65))
 	_text("原创场景 · 原创合成音效与配乐 · 本地记录",Vector2(173,834),15,MUTED)
 
 func _time(value: float) -> String:
@@ -490,6 +507,9 @@ func _minimap() -> void:
 		var pos = _map_position(r.distance,r.lane,rect)
 		draw_circle(pos,3.8,r.color.darkened(0.35) if r.node.recovery_time>0 else r.color)
 		if r.finished: draw_arc(pos,6,0,TAU,12,r.color,1,true)
+	for cop in game.police.units:
+		var dot=_map_position(cop.distance,cop.lane,rect)
+		draw_rect(Rect2(dot-Vector2(4,4),Vector2(8,8)),Color("ff5479") if fmod(game.total_time,0.4)<0.2 else Color("579cff"))
 	var player_pos = _map_position(game.distance,game.lane,rect)
 	draw_circle(player_pos,7,INK)
 	draw_circle(player_pos,5,ORANGE)
@@ -517,3 +537,36 @@ func _rear_view() -> void:
 	var label = "后方暂无近距离追兵"
 	if not behind.is_empty(): label = "%s  距离 %dm"%[behind[0].name,game.distance-behind[0].distance]
 	_center("REAR VIEW  /  "+label,Vector2(726,249),13,MUTED,body_font)
+
+func _garage() -> void:
+	_shade(0.91)
+	_text("BUILD YOUR LEGACY",Vector2(70,112),55,WHITE,title_font)
+	_text("摩托商店 / 已拥有的车辆可以免费切换",Vector2(73,156),21,CYAN)
+	_text("钱包 $%d"%game.economy.cash,Vector2(1020,110),29,ORANGE,number_font)
+	_text("待缴罚款 $%d"%game.economy.debt,Vector2(1020,148),18,MUTED)
+	for i in game.Economy.BIKES.size():
+		var bike=game.Economy.BIKES[i]
+		var x=72+i*328
+		var selected_bike=game.economy.equipped==bike.id
+		_panel(Rect2(x,204,306,492),Color("122333"),9,bike.color if selected_bike else Color("304554"))
+		_text(bike.tag,Vector2(x+18,238),15,bike.color,number_font)
+		_text(bike.name,Vector2(x+18,275),25,WHITE)
+		# Original schematic preview; the equipped bike also changes its real 3D model.
+		for wheel_x in [x+69,x+237]:
+			draw_circle(Vector2(wheel_x,367),30,Color("060f18"))
+			draw_arc(Vector2(wheel_x,367),21,0,TAU,24,MUTED,3,true)
+		draw_line(Vector2(x+69,367),Vector2(x+103,312),WHITE,7,true)
+		draw_line(Vector2(x+69,367),Vector2(x+190,345),bike.color,8,true)
+		draw_line(Vector2(x+190,345),Vector2(x+237,367),WHITE,7,true)
+		draw_colored_polygon(PackedVector2Array([Vector2(x+88,324),Vector2(x+125,299),Vector2(x+172,326),Vector2(x+252,316),Vector2(x+219,347),Vector2(x+114,352)]),bike.color)
+		if i==2: draw_rect(Rect2(x+137,331,62,30),bike.color.darkened(0.25))
+		if i==3: draw_line(Vector2(x+218,300),Vector2(x+270,300),bike.color,7,true)
+		_text("极速 / 氮气  %d / %d km/h"%[bike.speed*3.6,bike.boost*3.6],Vector2(x+18,426),16,WHITE)
+		_text("加速 %d   操控 %.1f"%[bike.accel,bike.handling],Vector2(x+18,459),17,MUTED)
+		_text("受伤倍率  %.0f%%"%(bike.armor*100),Vector2(x+18,491),17,MUTED)
+		_paragraph(bike.desc,Vector2(x+18,526),268,17,MUTED)
+		var owned=bike.id in game.economy.owned
+		_button("bike:"+bike.id,"驾驶中" if selected_bike else ("换上这台" if owned else "购买 $%d"%bike.price),Rect2(x+17,620,272,53),selected_bike)
+	_text(game.garage_message,Vector2(76,739),20,CYAN)
+	_text("名次越高，奖金越多；难度与参赛人数影响奖金。被捕退赛无奖金，欠款从后续奖金优先扣除。",Vector2(76,778),17,MUTED)
+	_button("back","返回",Rect2(74,817,260,55),true,"ESC")

@@ -13,6 +13,8 @@ var rng = RandomNumberGenerator.new()
 var scenery: Node3D
 var finish_gate: Node3D
 var current_distance = 0.0
+var spectators: Array[Dictionary] = []
+var finish_line: Node3D
 
 func center_at(d: float) -> float:
 	var c = course.curve
@@ -28,6 +30,7 @@ func relative_position(lane: float, track_distance: float, player_distance: floa
 func build(map_index: int = 0) -> void:
 	for child in get_children(): child.free()
 	chunks.clear()
+	spectators.clear()
 	course_index = clampi(map_index,0,Data.COURSES.size()-1)
 	course = Data.COURSES[course_index]
 	rng.seed = 20260924+course_index*77
@@ -52,6 +55,7 @@ func build(map_index: int = 0) -> void:
 			Geo.wedge(self,Vector3(75,height*0.30,65),Vector3(pos.x,height*0.85-10,pos.z),Geo.mat(Color("dce9e7"),0,0.85))
 	finish_gate = _gate("FINISH",Color("b9f3ec"))
 	add_child(finish_gate)
+	_build_finish_festival()
 	update_track(0,course.length)
 
 func _environment() -> void:
@@ -201,7 +205,7 @@ func _gate(text: String, color: Color) -> Node3D:
 	gate.add_child(label)
 	return gate
 
-func update_track(distance: float, finish: float) -> void:
+func update_track(distance: float, finish: float, time: float = 0.0) -> void:
 	current_distance = distance
 	var base = int(floor(distance/CHUNK_LENGTH))-6
 	for i in CHUNK_COUNT:
@@ -216,7 +220,11 @@ func update_track(distance: float, finish: float) -> void:
 		if bridge: bridge.visible = d>=finish*0.66 and d<=finish+200
 	finish_gate.position = relative_position(0,finish,distance)
 	finish_gate.rotation.y = yaw_at(finish)
-	finish_gate.visible = finish-distance < 900 and finish-distance > -80
+	finish_gate.visible = finish-distance < 700 and finish-distance > -100
+	if finish_gate.visible:
+		for fan in spectators:
+			fan.arm.rotation.z=fan.side*(0.4+sin(time*5+fan.phase)*0.6)
+			fan.node.position.y=fan.base_y+absf(sin(time*3.5+fan.phase))*0.14
 
 func car(color: Color, van: bool = false) -> Node3D:
 	var n = Node3D.new()
@@ -239,3 +247,46 @@ func car(color: Color, van: bool = false) -> Node3D:
 		Geo.box(n,Vector3(0.53,0.15,0.04),Vector3(side*0.63,0.91,2.06),Geo.mat(Color("ff384d"),0,0.3,3))
 		Geo.box(n,Vector3(0.51,0.15,0.04),Vector3(side*0.65,0.88,-2.06),Geo.mat(Color("e4f7ff"),0,0.3,3))
 	return n
+
+func _build_finish_festival() -> void:
+	finish_line=Node3D.new()
+	finish_line.name="FinishLine"
+	finish_gate.add_child(finish_line)
+	var white=Geo.mat(Color("f4f4ed"),0,0.8)
+	var black=Geo.mat(Color("10151d"),0,0.8)
+	for row in 4:
+		for col in 24:
+			Geo.box(finish_line,Vector3(0.76,0.025,0.76),Vector3(-8.74+col*0.76,0.04,-1.14+row*0.76),white if (row+col)%2==0 else black)
+	var platform=Geo.mat(Color("314251"),0.4,0.8)
+	var colors=[Color("ff8257"),Color("69d6d2"),Color("e9c577"),Color("a88ce5"),Color("e9eff3")]
+	for side in [-1,1]:
+		for row in 2:
+			Geo.box(finish_gate,Vector3(3,0.8+row*0.65,37),Vector3(side*(12.3+row*2.3),row*0.325,-10),platform)
+			for i in 12:
+				var fan=Node3D.new()
+				finish_gate.add_child(fan)
+				var height=0.4+row*0.65
+				fan.position=Vector3(side*(11.9+row*2.4),height,-26+i*2.8)
+				fan.rotation.y=side*PI/2
+				var shirt=Geo.mat(colors[(i+row*2)%colors.size()],0,0.9)
+				Geo.box(fan,Vector3(0.5,0.68,0.32),Vector3(0,1.05,0),shirt)
+				Geo.sphere(fan,0.21,Vector3(0,1.62,0),Geo.mat(Color("c59977").darkened(float(i%3)*0.13)))
+				for x in [-0.15,0.15]: Geo.box(fan,Vector3(0.17,0.72,0.2),Vector3(x,0.38,0),black)
+				var arm=Node3D.new()
+				fan.add_child(arm)
+				arm.position=Vector3(0.28,1.25,0)
+				Geo.box(arm,Vector3(0.14,0.7,0.14),Vector3(0,0.3,0),shirt)
+				if i%3==0:
+					Geo.box(arm,Vector3(0.035,0.8,0.035),Vector3(0,0.9,0),white)
+					Geo.box(arm,Vector3(0.65,0.4,0.025),Vector3(0.3,1.07,0),shirt)
+				spectators.append({"node":fan,"arm":arm,"base_y":height,"side":float(side),"phase":float(i+row*9)})
+		var banner=Label3D.new()
+		banner.text="WELCOME RIDERS"
+		banner.position=Vector3(side*13,4.8,-11)
+		banner.rotation.y=side*PI/2
+		banner.font_size=72
+		banner.pixel_size=0.011
+		banner.modulate=Color("f8d58d")
+		finish_gate.add_child(banner)
+		var board=Geo.box(finish_gate,Vector3(8,1.2,0.08),banner.position+Vector3(side*0.05,0,0),platform)
+		board.rotation.y=side*PI/2

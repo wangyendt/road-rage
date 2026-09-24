@@ -8,6 +8,8 @@ const Sound = preload("res://scripts/audio.gd")
 const FX = preload("res://scripts/fx.gd")
 const Data = preload("res://scripts/game_data.gd")
 const Director = preload("res://scripts/race_director.gd")
+const Economy = preload("res://scripts/economy.gd")
+const Police = preload("res://scripts/police.gd")
 const Controls = preload("res://scripts/controls.gd")
 var track_length = 5400.0
 const MAX_SPEED = 74.0
@@ -86,10 +88,19 @@ var crashes = 0
 var impact_meter = 0.0
 var recovery_was_active = false
 var records: Dictionary = {}
+var economy = Economy.new()
+var police: Node3D
+var active_bike: Dictionary = Economy.BIKES[0]
+var garage_message = "购买后自动换车；已有车辆免费切换。"
+var race_income = {"gross":0,"debt_paid":0,"net":0}
+var race_fine = {"gross":0,"paid":0,"unpaid":0}
+var finish_celebrated = false
 
 
 func _ready() -> void:
 	get_tree().auto_accept_quit = false
+	for arg in OS.get_cmdline_user_args():
+		if arg in ["--test-mode","--autoplay"]: test_mode=true
 	rng.seed = 92107
 	_setup_input()
 	_load_save()
@@ -98,7 +109,8 @@ func _ready() -> void:
 	world.build(race_options.course)
 	player = Bike.new()
 	add_child(player)
-	player.build(Color("f26942"),true)
+	active_bike=economy.bike().duplicate()
+	player.build(active_bike.color,true,active_bike.shape)
 	camera = Camera3D.new()
 	camera.fov = 72
 	camera.far = 1400
@@ -110,6 +122,9 @@ func _ready() -> void:
 	add_child(fx)
 	sound = Sound.new()
 	add_child(sound)
+	police=Police.new()
+	police.game=self
+	add_child(police)
 	_create_post()
 	var layer = CanvasLayer.new()
 	layer.layer = 10
@@ -202,6 +217,7 @@ func _process(raw_dt: float) -> void:
 	if test_mode: _test_step(raw_dt)
 	var racing = state == "race"
 	sound.update_audio(dt,speed,boost_active,racing)
+	sound.update_world_audio(track_length-distance,police.intensity,racing)
 	if menu_backdrop():
 		demo_distance += dt*12
 		world.update_track(demo_distance,track_length)
@@ -225,7 +241,7 @@ func _process(raw_dt: float) -> void:
 			sim_dt *= 0.12
 		_simulate(sim_dt)
 	if state in ["race","countdown","finished"]:
-		world.update_track(distance,track_length)
+		world.update_track(distance,track_length,total_time)
 		_update_entities()
 	if state in ["race","countdown","finished"] or menu_backdrop():
 		_update_camera(dt)
@@ -241,6 +257,10 @@ func _process(raw_dt: float) -> void:
 
 func start_race() -> void:
 	_clear_race()
+	_apply_bike()
+	race_income={"gross":0,"debt_paid":0,"net":0}
+	race_fine={"gross":0,"paid":0,"unpaid":0}
+	finish_celebrated=false
 	menu_history.clear()
 	active_level = clampi(race_options.difficulty,1,5)
 	track_length = Data.COURSES[race_options.course].length
@@ -293,7 +313,7 @@ func start_race() -> void:
 	_spawn_traffic(155,-6.75)
 	_spawn_traffic(230,2.25)
 	_spawn_pickup(105,2.25,"nitro")
-	world.update_track(distance,track_length)
+	world.update_track(distance,track_length,total_time)
 	_update_entities()
 	_update_camera(1)
 
@@ -303,6 +323,7 @@ func _clear_race() -> void:
 			if is_instance_valid(item.node): item.node.queue_free()
 		list.clear()
 	fx.clear_effects()
+	if police: police.reset()
 
 func _simulate(dt: float) -> void:
 	elapsed += dt
@@ -344,12 +365,12 @@ func _simulate(dt: float) -> void:
 			if nitro<=0.5: boost_lock = true
 			if not was_boost: sound.sfx("nitro",-5)
 		else: nitro = minf(100,nitro+dt*(8+catchup_help*0.8))
-		var target = (BOOST_SPEED if boost_active else MAX_SPEED)+catchup_help
+		var target = (active_bike.boost if boost_active else active_bike.speed)+catchup_help
 		if brake: target = 24
 		if absf(lane)>8.8: target = 40
-		speed = move_toward(speed,target,dt*(42 if brake else 17+catchup_help))
+		speed = move_toward(speed,target,dt*(42 if brake else active_bike.accel+catchup_help))
 		steer = lerpf(steer,input_steer,1-exp(-dt*9))
-		lane += steer*dt*(10.5 if not boost_active else 11.8)
+		lane += steer*dt*(active_bike.handling*(1.12 if boost_active else 1.0))
 		lane += sin(distance*0.0039)*speed*dt*0.0025
 		if absf(lane)>9.0:
 			lane = clampf(lane,-9.1,9.1)
@@ -361,6 +382,11 @@ func _simulate(dt: float) -> void:
 	for rival in rivals: _simulate_rival(rival,dt)
 	_simulate_traffic(dt)
 	_simulate_pickups(dt)
+	police.update(dt)
+	if state!="race": return
+	if track_length-distance<350 and not finish_celebrated:
+		finish_celebrated=true
+		announce("终点就在前方", "穿过黑白终点线，观众正在为你喝彩！",Color("b9f3ec"),3)
 	traffic_timer -= dt
 	pickup_timer -= dt
 	if traffic_timer<=0 and traffic.size()<16:
@@ -636,7 +662,7 @@ func _nearest_side() -> int:
 
 func take_damage(amount: float, cause: String) -> void:
 	if damage_cooldown>0 or state!="race" or player.recovery_time>0: return
-	health = maxf(0,health-amount*Data.difficulty(active_level).damage)
+	health = maxf(0,health-amount*Data.difficulty(active_level).damage*active_bike.armor)
 	damage_cooldown = 1.1
 	damage_flash = 0.9
 	shake = 0.55
@@ -708,6 +734,7 @@ func finish_race(reason: String) -> void:
 	state = "finished"
 	boost_active = false
 	if reason == "finished":
+		race_income=economy.award(Economy.prize(final_rank,rivals.size()+1,active_level))
 		score += (rivals.size()+2-final_rank)*600+int(health)*10
 		if best_time<=0 or elapsed<best_time: best_time = elapsed
 		var record_key = "%s_%d"%[world.course.id,active_level]
@@ -764,7 +791,11 @@ func to_menu() -> void:
 
 func ui_action(action: String) -> void:
 	sound.sfx("click",-7)
-	if action.begins_with("course:"):
+	if action.begins_with("bike:"):
+		if state!="garage" or not rivals.is_empty(): return
+		garage_message=economy.select(action.get_slice(":",1))
+		_apply_bike()
+	elif action.begins_with("course:"):
 		race_options.course = int(action.get_slice(":",1))
 		world.build(race_options.course)
 	elif action.begins_with("profile:"):
@@ -780,6 +811,9 @@ func ui_action(action: String) -> void:
 			"resume": state = resume_state
 			"menu": to_menu()
 			"help", "settings", "roster", "bindings": open_page(action)
+			"garage":
+				if state=="finished": to_menu()
+				if rivals.is_empty(): open_page("garage")
 			"back": back()
 			"ai_minus": race_options.ai_count = maxi(1,race_options.ai_count-1)
 			"ai_plus": race_options.ai_count = mini(15,race_options.ai_count+1)
@@ -812,6 +846,7 @@ func _apply_settings() -> void:
 	get_viewport().msaa_3d = Viewport.MSAA_2X if settings.quality else Viewport.MSAA_DISABLED
 
 func _load_save() -> void:
+	if test_mode: return
 	var file = ConfigFile.new()
 	if file.load(SAVE_PATH) != OK: return
 	best_score = int(file.get_value("records","score",0))
@@ -825,6 +860,7 @@ func _load_save() -> void:
 	var saved_records = file.get_value("records","courses",{})
 	if saved_records is Dictionary: records=saved_records
 	controls.load_config(file)
+	economy.load_config(file)
 
 func _save() -> void:
 	if test_mode: return
@@ -835,6 +871,7 @@ func _save() -> void:
 	for key in race_options: file.set_value("race",key,race_options[key])
 	file.set_value("records","courses",records)
 	controls.save_config(file)
+	economy.save_config(file)
 	file.save(SAVE_PATH)
 
 # Opt-in development harness. Never enabled during ordinary play.
@@ -863,7 +900,7 @@ func _test_step(dt: float) -> void:
 		screenshot_at = -1
 		_capture.call_deferred()
 	if quit_after>0 and test_elapsed>quit_after:
-		print("SMOKE_RESULT ",JSON.stringify({"state":state,"distance":distance,"health":health,"hits":hits,"takedowns":takedowns,"traffic":traffic.size(),"fps":Engine.get_frames_per_second(),"score":score}))
+		print("SMOKE_RESULT ",JSON.stringify({"state":state,"distance":distance,"health":health,"hits":hits,"takedowns":takedowns,"traffic":traffic.size(),"fps":Engine.get_frames_per_second(),"score":score,"rank":final_rank,"reason":finish_reason,"prize":race_income.gross,"fine":race_fine.gross,"cash":economy.cash,"bike":active_bike.id}))
 		request_quit()
 
 func _capture() -> void:
@@ -922,3 +959,17 @@ func standings() -> Array[Dictionary]:
 		if a.finished!=b.finished: return a.finished
 		return a.distance>b.distance)
 	return rows
+
+func _apply_bike() -> void:
+	active_bike=economy.bike().duplicate()
+	if is_instance_valid(player):
+		remove_child(player)
+		player.queue_free()
+	player=Bike.new()
+	add_child(player)
+	player.build(active_bike.color,true,active_bike.shape)
+
+func arrest_player() -> void:
+	if state!="race" or player.recovery_time<=0 or player.recovery_elapsed<0.85: return
+	race_fine=economy.fine(350+active_level*150)
+	finish_race("busted")

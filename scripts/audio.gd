@@ -1,5 +1,7 @@
 extends Node
 var engine: AudioStreamPlayer
+var siren: AudioStreamPlayer
+var crowd: AudioStreamPlayer
 var music: AudioStreamPlayer
 var sounds: Dictionary = {}
 var voices: Array[AudioStreamPlayer] = []
@@ -20,6 +22,8 @@ func _ready() -> void:
 		voices.append(p)
 	engine = _loop("engine","SFX",-20)
 	music = _loop("music","Music",-7)
+	siren = _loop("siren","SFX",-80)
+	crowd = _loop("crowd","SFX",-80)
 
 func _loop(key: String, bus_name: String, volume: float) -> AudioStreamPlayer:
 	var p = AudioStreamPlayer.new()
@@ -54,6 +58,10 @@ func update_audio(dt: float, speed: float, boost: bool, racing: bool) -> void:
 	AudioServer.set_bus_volume_db(0,linear_to_db(maxf(0.001,master_volume))-4.0)
 
 func shutdown() -> void:
+	for p in [siren,crowd]:
+		if p:
+			p.stop()
+			p.stream=null
 	for p in voices:
 		p.stop()
 		p.stream = null
@@ -67,3 +75,8 @@ func shutdown() -> void:
 
 func _exit_tree() -> void:
 	shutdown()
+
+func update_world_audio(remaining: float, pursuit: float, racing: bool) -> void:
+	if not siren: return
+	siren.volume_db=linear_to_db(maxf(0.0001,pursuit*0.6)) if racing else -80
+	crowd.volume_db=linear_to_db(maxf(0.0001,(1-clampf(absf(remaining)/300,0,1))*0.75)) if racing else -80

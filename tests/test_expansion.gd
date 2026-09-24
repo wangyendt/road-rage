@@ -23,6 +23,7 @@ func fresh(count: int=15, level: int=5) -> void:
 	game.countdown=0
 	game.set_process(false)
 func quiet_track() -> void:
+	game.police.enabled=false
 	for car in game.traffic: car.node.queue_free()
 	game.traffic.clear()
 	for p in game.pickups: p.node.queue_free()

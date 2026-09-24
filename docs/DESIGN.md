@@ -1,4 +1,4 @@
-# v2.0 设计说明
+# v3.0 设计说明
 
 ## 核心体验
 
@@ -45,4 +45,8 @@
 
 程序化模型、共享几何/材质、循环道路与预合成 WAV，避免大型外部素材依赖。原创风格化美术，不是商业写实资产。存档为本地 ConfigFile。
 
-未实现联网、开放世界、车辆商店、锦标赛生涯、真实驾驶物理和专业动作捕捉。
+未实现联网、开放世界、锦标赛生涯、真实驾驶物理和专业动作捕捉。
+
+## Career expansion
+
+See `CAREER.md` for the v3 finish festival, police pursuit, arrest/fine ledger, prize schedule and four-bike garage.

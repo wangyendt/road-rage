@@ -19,8 +19,10 @@ var recovery_elapsed = 0.0
 var recovery_duration = 3.85
 var crash_side = 1.0
 var recovery_stage = ""
+var model_shape = 0
 
-func build(color: Color, player: bool = false) -> void:
+func build(color: Color, player: bool = false, shape: int = 0) -> void:
+	model_shape=shape
 	paint = color
 	is_player = player
 	chassis = Node3D.new()
@@ -65,6 +67,17 @@ func build(color: Color, player: bool = false) -> void:
 	Geo.box(chassis,Vector3(1.12,0.07,0.10),Vector3(0,1.48,-0.60),dark)
 	Geo.wedge(chassis,Vector3(0.55,0.40,0.3),Vector3(0,1.56,-0.76),Geo.mat(Color("254455"),0.7,0.15))
 	Geo.box(chassis,Vector3(0.47,0.12,0.05),Vector3(0,1.32,-1.06),light)
+	if shape==1:
+		Geo.box(chassis,Vector3(0.07,0.08,1.65),Vector3(0,1.5,0.1),light)
+		for side in [-1,1]: Geo.link(chassis,Vector3(side*0.5,0.65,0.7),Vector3(side*0.43,1.2,-0.6),0.06,shell)
+	elif shape==2:
+		for side in [-1,1]:
+			Geo.box(chassis,Vector3(0.25,0.6,1.0),Vector3(side*0.52,0.99,0.1),shell)
+			Geo.link(chassis,Vector3(side*0.7,0.62,-0.6),Vector3(side*0.7,1.08,-0.6),0.12,steel)
+	elif shape==3:
+		Geo.wedge(chassis,Vector3(0.95,0.9,1.7),Vector3(0,1.14,-0.38),shell)
+		for side in [-1,1]: Geo.box(chassis,Vector3(0.055,0.35,0.08),Vector3(side*0.35,1.52,0.98),dark)
+		Geo.box(chassis,Vector3(1.45,0.09,0.36),Vector3(0,1.71,0.98),shell)
 	# Rider: articulated jacket, boots, helmet, and swinging baton.
 	rider = Node3D.new()
 	chassis.add_child(rider)
