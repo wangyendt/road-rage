@@ -13,6 +13,12 @@ var attack_time = 0.0
 var down_time = 0.0
 var is_player = false
 var glow: OmniLight3D
+var legs: Array[Node3D] = []
+var recovery_time = 0.0
+var recovery_elapsed = 0.0
+var recovery_duration = 3.85
+var crash_side = 1.0
+var recovery_stage = ""
 
 func build(color: Color, player: bool = false) -> void:
 	paint = color
@@ -69,9 +75,13 @@ func build(color: Color, player: bool = false) -> void:
 	Geo.box(rider,Vector3(0.46,0.35,0.075),Vector3(0,1.82,0.49),shell)
 	Geo.box(rider,Vector3(0.09,0.30,0.09),Vector3(0,1.82,0.53),trim)
 	for s in [-1.0,1.0]:
-		Geo.link(rider,Vector3(s*0.25,1.4,0.43),Vector3(s*0.51,1.00,-0.02),0.24,jacket)
-		Geo.link(rider,Vector3(s*0.51,1.00,-0.02),Vector3(s*0.46,0.65,0.43),0.19,dark)
-		Geo.box(rider,Vector3(0.23,0.18,0.4),Vector3(s*0.45,0.64,0.29),dark)
+		var leg = Node3D.new()
+		rider.add_child(leg)
+		leg.position = Vector3(s*0.25,1.4,0.43)
+		Geo.link(leg,Vector3.ZERO,Vector3(s*0.26,-0.40,-0.45),0.24,jacket)
+		Geo.link(leg,Vector3(s*0.26,-0.40,-0.45),Vector3(s*0.21,-0.75,0),0.19,dark)
+		Geo.box(leg,Vector3(0.23,0.18,0.4),Vector3(s*0.20,-0.76,-0.14),dark)
+		legs.append(leg)
 		Geo.sphere(rider,0.20,Vector3(s*0.34,1.98,0.15),armor)
 	Geo.sphere(rider,0.29,Vector3(0,2.21,-0.01),shell,Vector3(0.95,1.08,1.10))
 	Geo.sphere(rider,0.26,Vector3(0,2.23,-0.15),Geo.mat(Color("132638"),0.75,0.12),Vector3(0.97,0.57,0.76))
@@ -87,6 +97,8 @@ func build(color: Color, player: bool = false) -> void:
 	glow.omni_range = 4.5
 	glow.position = Vector3(0,0.6,0.9)
 	chassis.add_child(glow)
+	for part in rider.get_children(): part.position -= Vector3(0,1.4,0.2)
+	rider.position = Vector3(0,1.4,0.2)
 
 func _arm(parent: Node3D, side: int, jacket: Material, glove: Material) -> Node3D:
 	var arm = Node3D.new()
@@ -98,6 +110,9 @@ func _arm(parent: Node3D, side: int, jacket: Material, glove: Material) -> Node3
 	return arm
 
 func animate(dt: float, speed: float, steer: float, boost: bool, time: float) -> void:
+	if recovery_time>0:
+		_animate_recovery(dt)
+		return
 	attack_time = maxf(0,attack_time-dt)
 	for wheel in wheels:
 		wheel.rotation.x -= speed*dt/0.47
@@ -127,3 +142,76 @@ func animate(dt: float, speed: float, steer: float, boost: bool, time: float) ->
 func swing(side: int) -> void:
 	attack_side = side
 	attack_time = 0.36
+
+func begin_crash(side: float = 1.0) -> void:
+	if recovery_time>0: return
+	crash_side = side
+	recovery_elapsed = 0
+	recovery_time = recovery_duration
+	attack_time = 0
+	rider.reparent(self,true)
+	bat.visible = false
+	for flame in flames: flame.visible = false
+	glow.light_energy = 0
+
+func reset_pose() -> void:
+	recovery_time = 0
+	recovery_elapsed = 0
+	recovery_stage = ""
+	down_time = 0
+	attack_time = 0
+	if rider.get_parent()!=chassis: rider.reparent(chassis,false)
+	rider.position = Vector3(0,1.4,0.2)
+	rider.rotation = Vector3.ZERO
+	chassis.position = Vector3.ZERO
+	chassis.rotation = Vector3.ZERO
+	for leg in legs: leg.rotation = Vector3.ZERO
+	arm_l.rotation = Vector3.ZERO
+	arm_r.rotation = Vector3.ZERO
+	bat.visible = false
+	for flame in flames: flame.visible = false
+
+func _animate_recovery(dt: float) -> void:
+	recovery_elapsed += dt
+	recovery_time = maxf(0,recovery_duration-recovery_elapsed)
+	var t = recovery_elapsed
+	chassis.rotation.z = crash_side*1.35*clampf(t/0.4,0,1)
+	chassis.position.y = -0.10
+	for leg in legs: leg.rotation = Vector3.ZERO
+	if t<0.85:
+		recovery_stage = "撞飞"
+		var p = t/0.85
+		rider.position = Vector3(crash_side*1.7*p,lerpf(1.4,0.6,p)+sin(p*PI)*2.5,-3.5*p)
+		rider.rotation = Vector3(-1.5*PI*p,0,crash_side*sin(p*PI)*0.65)
+		arm_l.rotation.z = -1.2
+		arm_r.rotation.z = 1.2
+	elif t<1.60:
+		recovery_stage = "翻滚落地"
+		var p = (t-0.85)/0.75
+		rider.position = Vector3(lerpf(1.7,2.3,p)*crash_side,0.55+sin(p*PI)*0.2,lerpf(-3.5,-4.5,p))
+		rider.rotation = Vector3(PI/2+sin(p*PI)*PI,0,0)
+	elif t<2.15:
+		recovery_stage = "起身"
+		var p = smoothstep(0,1,(t-1.60)/0.55)
+		rider.position = Vector3(crash_side*2.3,lerpf(0.55,0.95,p),-4.5)
+		rider.rotation = Vector3(lerpf(PI/2,0,p),0,0)
+		arm_l.rotation.z = -0.5*(1-p)
+		arm_r.rotation.z = 0.5*(1-p)
+	elif t<3.2:
+		recovery_stage = "跑回摩托"
+		var p = (t-2.15)/1.05
+		rider.position = Vector3(crash_side*lerpf(2.3,0.9,p),0.95+absf(sin(p*PI*5))*0.07,lerpf(-4.5,0.25,p))
+		rider.rotation = Vector3(0.12,PI+crash_side*0.28,0)
+		for i in legs.size(): legs[i].rotation.x = sin(p*PI*10+i*PI)*0.62
+		arm_l.rotation.x = sin(p*PI*10)*0.65
+		arm_r.rotation.x = -sin(p*PI*10)*0.65
+	else:
+		recovery_stage = "扶车上车"
+		var p = smoothstep(0,1,(t-3.2)/0.65)
+		chassis.rotation.z = crash_side*1.35*(1-p)
+		chassis.position.y = -0.10*(1-p)
+		rider.position = Vector3(crash_side*0.9*(1-p),lerpf(0.95,1.4,p),lerpf(0.25,0.2,p))
+		rider.rotation = Vector3(0,PI*(1-p),0)
+		arm_l.rotation = Vector3.ZERO
+		arm_r.rotation = Vector3.ZERO
+	if recovery_time<=0: reset_pose()

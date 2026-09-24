@@ -10,6 +10,7 @@ var master_volume = 0.8
 
 func _ready() -> void:
 	AudioServer.set_bus_layout(load("res://assets/default_bus_layout.tres"))
+	if DisplayServer.get_name()=="headless": return
 	for key in ["hit","crash","swing","nitro","click","count","go","pickup","finish"]:
 		sounds[key] = load("res://assets/audio/"+key+".wav")
 	for i in 12:
@@ -34,6 +35,7 @@ func _loop(key: String, bus_name: String, volume: float) -> AudioStreamPlayer:
 	return p
 
 func sfx(key: String, volume: float = 0.0, pitch: float = 1.0) -> void:
+	if DisplayServer.get_name()=="headless": return
 	if not sounds.has(key): return
 	var p = voices[voice_index%voices.size()]
 	voice_index += 1
@@ -43,6 +45,7 @@ func sfx(key: String, volume: float = 0.0, pitch: float = 1.0) -> void:
 	p.play()
 
 func update_audio(dt: float, speed: float, boost: bool, racing: bool) -> void:
+	if not engine: return
 	engine.pitch_scale = lerpf(engine.pitch_scale,0.65+speed/40.0,1-exp(-dt*5))
 	engine.volume_db = lerpf(engine.volume_db,(-14.0 if boost else -19.0) if racing else -34.0,dt*4)
 	music.volume_db = lerpf(music.volume_db,-8.0 if racing else -13.0,dt*3)

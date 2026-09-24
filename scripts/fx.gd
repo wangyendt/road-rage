@@ -2,6 +2,7 @@ extends Node3D
 const Geo = preload("res://scripts/geo.gd")
 
 func burst(pos: Vector3, color: Color, heavy: bool = false) -> void:
+	if DisplayServer.get_name()=="headless": return
 	var p = CPUParticles3D.new()
 	p.position = pos
 	p.amount = 46 if heavy else 25
@@ -24,6 +25,7 @@ func burst(pos: Vector3, color: Color, heavy: bool = false) -> void:
 	get_tree().create_timer(1.2).timeout.connect(p.queue_free)
 
 func slash(pos: Vector3, side: int) -> void:
+	if DisplayServer.get_name()=="headless": return
 	var mesh = ImmediateMesh.new()
 	mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
 	for i in 14:

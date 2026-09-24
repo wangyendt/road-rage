@@ -20,6 +20,7 @@ func step(frames: int) -> void:
 		game._process(1.0/60.0)
 
 func fresh() -> void:
+	game.race_options = {"course":0,"ai_count":5,"difficulty":3}
 	game.start_race()
 	game.settings.hard = false
 	game.state = "race"
@@ -33,6 +34,7 @@ func run() -> void:
 	game.set_process(false)
 	check(game.state == "menu","boots into menu")
 	check(AudioServer.get_bus_index("Music")>=0 and AudioServer.get_bus_index("SFX")>=0,"music and effects buses exist")
+	game.race_options = {"course":0,"ai_count":5,"difficulty":3}
 	game.start_race()
 	check(game.state == "countdown" and game.rivals.size()==5,"race begins with countdown and five rivals")
 	game.back()
