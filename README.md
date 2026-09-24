@@ -1,4 +1,4 @@
-# ROAD RAGE · 极限狂飙 v3.1
+# ROAD RAGE · 极限狂飙 v3.2
 
 可从菜单玩到结算的 **3D 单机摩托竞速格斗游戏**。原创程序化模型、合成音效和电子配乐；Godot 4，面向 Apple Silicon Mac。
 
@@ -10,6 +10,14 @@
 - 构建目标 macOS 13+ / arm64；验证机器为 M1 Max、macOS 26.6、Godot 4.7.2。
 
 开始游戏后先选择场景、1–15 名 AI 和 1–5 级难度，再开始竞赛。
+
+## v3.2 脱逃、动态警笛与结算动效
+
+- 警车采用 6 秒拦截加速 / 10 秒散热节奏，散热时可以利用氮气甩开；警车也会被交通车辆阻挡。
+- 进入近距离追逐后，领先警车 100 m 并保持 2.5 s 即可脱逃；尚未接近的警车需拉开 230 m。HUD 显示当前阈值与倒计时。
+- 成功脱逃加 300 分，警车关闭警灯、减速驶离，不瞬移。至少 18 s 且继续行进 1100 m 后才可能出现下一轮追捕。
+- 警笛振幅按距离衰减，音高按声源/玩家沿连线方向的相对运动产生多普勒变化：接近偏高、远离偏低，同速时不因距离远近改变音高。音量和音高变化均平滑过渡。
+- 结算面板滑入淡入，分数、奖金和罚款逐步计数；胜利有彩屑与扩散光环，失败有斜向扫光，被捕带红蓝氛围。按钮始终可点击，动画不重复发钱。
 
 ## v3.1 公里数与全员数轴
 
@@ -82,6 +90,8 @@ scripts/controls.gd       InputMap、按键交换与保存
 scripts/economy.gd        奖金、钱包、罚款、购买与车型属性
 scripts/police.gd         警车追逐、警灯、下车抓捕
 scripts/race_progress.gd  公里数换算、全员进度与数轴定位
+scripts/siren_acoustics.gd  距离衰减与径向多普勒计算
+scripts/result_motion.gd  结算缓动与数字滚动
 scripts/audio.gd          音效、引擎、电子配乐
 scripts/fx.gd             火花与挥击弧光
 shaders/                 路面、窗户、屏幕效果
@@ -96,7 +106,7 @@ assets/                  原创音频、纹理、图标及许可
   --autoplay --ai=15 --level=5 --course=3 --quit-after=110
 ```
 
-测试脚本覆盖 176 项逻辑和真实渲染输入断言。详情见 `docs/QA.md`；策略说明见 `docs/DESIGN.md`。`--course=0..3` 对应上表顺序。
+测试脚本覆盖 217 项逻辑和真实渲染输入断言。详情见 `docs/QA.md`；策略说明见 `docs/DESIGN.md`。`--course=0..3` 对应上表顺序。
 
 构建需要已安装 Godot 与 Xcode 命令行工具，可用 `GODOT_BIN` 指定引擎。输出 `builds/Road Rage.app` 和 `builds/RoadRage-macOS-AppleSilicon.zip`。
 
@@ -104,7 +114,7 @@ assets/                  原创音频、纹理、图标及许可
 
 音频再生成：`python3 tools/generate_audio.py`，仅再生成需要 NumPy；游玩无需 Python。含引擎、挥击、碰撞、氮气、补给、倒计时、结算和 132 BPM 原创电子配乐。
 
-警笛和观众欢呼再生成：`python3 tools/generate_career_audio.py`，仅用 Python 标准库。
+警笛、观众欢呼和失败音效再生成：`python3 tools/generate_career_audio.py`，仅用 Python 标准库。
 
 ## 范围
 

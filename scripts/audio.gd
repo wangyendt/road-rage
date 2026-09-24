@@ -9,11 +9,13 @@ var voice_index = 0
 var muted = false
 var music_enabled = true
 var master_volume = 0.8
+var siren_gain = 0.0
+var siren_pitch = 1.0
 
 func _ready() -> void:
 	AudioServer.set_bus_layout(load("res://assets/default_bus_layout.tres"))
 	if DisplayServer.get_name()=="headless": return
-	for key in ["hit","crash","swing","nitro","click","count","go","pickup","finish"]:
+	for key in ["hit","crash","swing","nitro","click","count","go","pickup","finish","defeat"]:
 		sounds[key] = load("res://assets/audio/"+key+".wav")
 	for i in 12:
 		var p = AudioStreamPlayer.new()
@@ -76,7 +78,11 @@ func shutdown() -> void:
 func _exit_tree() -> void:
 	shutdown()
 
-func update_world_audio(remaining: float, pursuit: float, racing: bool) -> void:
+func update_world_audio(remaining: float, pursuit: float, racing: bool, dt: float = 0.016667, pitch: float = 1.0) -> void:
+	var smoothing=1-exp(-dt*8)
+	siren_gain=lerpf(siren_gain,clampf(pursuit,0,1) if racing else 0.0,smoothing)
+	siren_pitch=lerpf(siren_pitch,clampf(pitch,0.78,1.28) if racing else 1.0,smoothing)
 	if not siren: return
-	siren.volume_db=linear_to_db(maxf(0.0001,pursuit*0.6)) if racing else -80
+	siren.volume_db=linear_to_db(maxf(0.0001,siren_gain*0.6))
+	siren.pitch_scale=siren_pitch
 	crowd.volume_db=linear_to_db(maxf(0.0001,(1-clampf(absf(remaining)/300,0,1))*0.75)) if racing else -80

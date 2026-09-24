@@ -95,6 +95,8 @@ var garage_message = "购买后自动换车；已有车辆免费切换。"
 var race_income = {"gross":0,"debt_paid":0,"net":0}
 var race_fine = {"gross":0,"paid":0,"unpaid":0}
 var finish_celebrated = false
+var result_time = 0.0
+var result_stamp_played = false
 
 
 func _ready() -> void:
@@ -215,9 +217,14 @@ func _process(raw_dt: float) -> void:
 	var dt = minf(raw_dt,0.05)
 	total_time += dt
 	if test_mode: _test_step(raw_dt)
+	if state=="finished":
+		result_time+=dt
+		if result_time>=0.55 and not result_stamp_played:
+			result_stamp_played=true
+			sound.sfx("click",-12,1.2 if finish_reason=="finished" else 0.7)
 	var racing = state == "race"
 	sound.update_audio(dt,speed,boost_active,racing)
-	sound.update_world_audio(track_length-distance,police.intensity,racing)
+	sound.update_world_audio(track_length-distance,police.intensity,racing,dt,police.pitch)
 	if menu_backdrop():
 		demo_distance += dt*12
 		world.update_track(demo_distance,track_length)
@@ -732,6 +739,8 @@ func finish_race(reason: String) -> void:
 	final_rank = rank_now()
 	finish_reason = reason
 	state = "finished"
+	result_time=0
+	result_stamp_played=false
 	boost_active = false
 	if reason == "finished":
 		race_income=economy.award(Economy.prize(final_rank,rivals.size()+1,active_level))
@@ -742,6 +751,7 @@ func finish_race(reason: String) -> void:
 		if previous<=0 or elapsed<previous: records[record_key]=elapsed
 		sound.sfx("finish",-1)
 	else:
+		sound.sfx("defeat",-5)
 		player.down_time = 4
 		player.chassis.rotation.z = 1.25
 	best_score = maxi(best_score,score)
@@ -900,7 +910,7 @@ func _test_step(dt: float) -> void:
 		screenshot_at = -1
 		_capture.call_deferred()
 	if quit_after>0 and test_elapsed>quit_after:
-		print("SMOKE_RESULT ",JSON.stringify({"state":state,"distance":distance,"health":health,"hits":hits,"takedowns":takedowns,"traffic":traffic.size(),"fps":Engine.get_frames_per_second(),"score":score,"rank":final_rank,"reason":finish_reason,"prize":race_income.gross,"fine":race_fine.gross,"cash":economy.cash,"bike":active_bike.id}))
+		print("SMOKE_RESULT ",JSON.stringify({"state":state,"distance":distance,"health":health,"hits":hits,"takedowns":takedowns,"traffic":traffic.size(),"fps":Engine.get_frames_per_second(),"score":score,"rank":final_rank,"reason":finish_reason,"prize":race_income.gross,"fine":race_fine.gross,"cash":economy.cash,"bike":active_bike.id,"escapes":police.escapes}))
 		request_quit()
 
 func _capture() -> void:

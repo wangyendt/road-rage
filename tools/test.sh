@@ -18,5 +18,9 @@ grep -q 'CAREER_TEST_RESULTS passed=34 failed=0' "$ROOT/builds/test-logs/career.
 grep -q 'CAREER_UI_TEST_RESULTS passed=12 failed=0' "$ROOT/builds/test-logs/career-ui.log"
 "$GODOT" --path "$ROOT" --script tests/test_progress.gd 2>&1 | tee "$ROOT/builds/test-logs/progress.log"
 grep -q 'PROGRESS_TEST_RESULTS passed=19 failed=0' "$ROOT/builds/test-logs/progress.log"
+"$GODOT" --headless --path "$ROOT" --script tests/test_pursuit.gd 2>&1 | tee "$ROOT/builds/test-logs/pursuit.log"
+grep -q 'PURSUIT_TEST_RESULTS passed=30 failed=0' "$ROOT/builds/test-logs/pursuit.log"
+"$GODOT" --path "$ROOT" --script tests/test_feedback_ui.gd 2>&1 | tee "$ROOT/builds/test-logs/feedback-ui.log"
+grep -q 'FEEDBACK_UI_TEST_RESULTS passed=11 failed=0' "$ROOT/builds/test-logs/feedback-ui.log"
 if grep -E '^(SCRIPT ERROR:|ERROR:)' "$ROOT/builds/test-logs/"*.log; then exit 1; fi
-printf '\nAll 176 assertions passed.\n'
+printf '\nAll 217 assertions passed.\n'
