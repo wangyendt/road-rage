@@ -1,5 +1,6 @@
 extends Control
 ## Resolution-independent, keyboard/gamepad-accessible arcade interface.
+const Weapons = preload("res://scripts/weapons.gd")
 const Data = preload("res://scripts/game_data.gd")
 const Motion = preload("res://scripts/result_motion.gd")
 const Progress = preload("res://scripts/race_progress.gd")
@@ -209,16 +210,17 @@ func _race(interactive: bool = true) -> void:
 	_center("N" if game.speed<1 else "G%d"%clampi(int(game.speed/16)+1,1,6),c+Vector2(0,-40),18,ORANGE,number_font)
 	_center("%s/%s 转向   %s 刹车   %s/%s 攻击   %s 氮气   %s 车手信息   ESC 暂停"%[game.controls.label("steer_left"),game.controls.label("steer_right"),game.controls.label("brake"),game.controls.label("attack_left"),game.controls.label("attack_right"),game.controls.label("boost"),game.controls.label("show_roster")],Vector2(724,889),13,MUTED)
 	if game.combo>1 and game.combo_time>0:
-		_text("%d×"%game.combo,Vector2(1280,255),57,ORANGE,number_font)
-		_text("连击",Vector2(1300,282),16,WHITE)
+		_text("%d×"%game.combo,Vector2(1280,287),42,ORANGE,number_font)
+		_text("连击",Vector2(1300,315),16,WHITE)
 		var fraction = game.combo_time/5
-		draw_line(Vector2(1280,300),Vector2(1280+90*fraction,300),ORANGE,3,true)
+		draw_line(Vector2(1280,322),Vector2(1280+90*fraction,322),ORANGE,3,true)
 	if game.ride.airborne and game.ride.height>0.3 and game.player.recovery_time<=0:
 		_panel(Rect2(545,663,350,85),Color(0.03,0.10,0.16,0.82),8,CYAN)
 		_center("AIRBORNE  /  腾空",Vector2(720,693),23,CYAN,number_font)
 		_center("离地 %.1fm   ·   %.1fs"%[game.ride.height,game.ride.air_time],Vector2(720,729),20,WHITE)
 	elif not game.world.road_hint(game.distance).is_empty():
 		_center(game.world.road_hint(game.distance),Vector2(720,741),19,ORANGE)
+	_weapon_hud(interactive)
 	_draw_rival_markers()
 	_panel(Rect2(308,111,187,47),Color(0.04,0.09,0.15,0.86),6)
 	_text("钱包  $%d"%game.economy.cash,Vector2(320,141),18,CYAN,number_font)
@@ -267,7 +269,7 @@ func _draw_rival_markers() -> void:
 		if game.camera.is_position_behind(pos): continue
 		var screen = (game.camera.unproject_position(pos)-ui_offset)/ui_scale
 		if screen.x<60 or screen.x>1380 or screen.y<140 or screen.y>725: continue
-		var label_rect = Rect2(screen-Vector2(52,28),Vector2(104,48))
+		var label_rect = Rect2(screen-Vector2(65,28),Vector2(130,67))
 		var overlaps = false
 		for used in occupied:
 			if label_rect.intersects(used): overlaps = true
@@ -275,8 +277,9 @@ func _draw_rival_markers() -> void:
 		occupied.append(label_rect)
 		var warning = r.windup>0
 		var color = ORANGE if warning else r.color
-		var ready = absf(r.lane-game.lane)<3.5 and absf(gap)<6.4
+		var ready = Weapons.reaches(game.loadout.current,r.lane-game.lane,gap,r.ride.y-game.ride.y)
 		_center(("瞄准你 !" if r.target_id==-1 else "交战中") if warning else r.name,screen,15,color,body_font if warning else number_font)
+		if absf(gap)<24: _center(Weapons.data(r.loadout.current).name,screen+Vector2(0,29),12,MUTED)
 		for i in 2:
 			draw_rect(Rect2(screen+Vector2(-24+i*27,8),Vector2(21,4)),color if r.hp>i else Color("344757"))
 		if ready:
@@ -307,7 +310,7 @@ func _help() -> void:
 	_shade(0.88)
 	_text("LEARN THE STREETS",Vector2(180,136),56,WHITE,title_font)
 	_text("驾驶指南",Vector2(180,184),24,CYAN)
-	var rows = [[game.controls.label("steer_left")+" / "+game.controls.label("steer_right"),"左右转向（方向键也可用）","左摇杆"],[game.controls.label("brake"),"刹车 · 松开恢复自动油门","LT"],[game.controls.label("boost"),"按住氮气加速 · 松开恢复","RT / A"],[game.controls.label("attack_left")+" / "+game.controls.label("attack_right"),"左右攻击，连续命中击倒","LB / RB"],[game.controls.label("attack_auto"),"自动选择攻击方向","—"],[game.controls.label("show_roster"),"查看车手信息（自动暂停）","BACK"],["ESC / "+game.controls.label("pause_game"),"暂停 / 继续；M 静音，F11 全屏","START"]]
+	var rows = [[game.controls.label("steer_left")+" / "+game.controls.label("steer_right"),"左右转向（方向键也可用）","左摇杆"],[game.controls.label("brake"),"刹车 · 松开恢复自动油门","LT"],[game.controls.label("boost"),"按住氮气加速 · 松开恢复","RT / A"],[game.controls.label("attack_left")+" / "+game.controls.label("attack_right"),"左右攻击，连续命中击倒","LB / RB"],[game.controls.label("attack_auto"),"自动选择攻击方向","—"],[game.controls.label("show_roster"),"查看车手信息（自动暂停）","BACK"],[game.controls.label("cycle_weapon"),"切换拳击 / 踢击 / 夺来的武器","Y"],["ESC / "+game.controls.label("pause_game"),"暂停 / 继续；M 静音，F11 全屏","START"]]
 	for i in rows.size():
 		var y = 246+i*57
 		draw_line(Vector2(180,y+20),Vector2(1260,y+20),Color(0.4,0.6,0.7,0.18),1)
@@ -315,8 +318,8 @@ func _help() -> void:
 		_text(rows[i][1],Vector2(480,y),18,MUTED)
 		_text(rows[i][2],Vector2(1115,y),17,CYAN)
 	_text("赢法",Vector2(185,704),22,ORANGE)
-	_text("八个场景，最多 15 名 AI。冲坡会腾空，刹车过顶更稳；摔车后自动找车。",Vector2(270,704),18,WHITE)
-	_text("青色圆环补氮气，绿色十字修装甲；地图与后视镜可在设置中开关。",Vector2(270,740),17,MUTED)
+	_text("开局只有拳脚；亲手击倒持械 AI，自动夺取并装备其武器。",Vector2(270,704),18,WHITE)
+	_text("切换不打断攻击收招；摔车保留库存，每局重新从拳脚开始。",Vector2(270,740),17,MUTED)
 	_button("back","准备好了",Rect2(180,791,275,57),true,"ESC")
 
 func _results() -> void:
@@ -350,6 +353,7 @@ func _results() -> void:
 		_text("比赛奖金 $%d  /  抵扣欠款 $%d  /  实际入账 $%d"%[Motion.count(game.race_income.gross,t,0.4,1.0),Motion.count(game.race_income.debt_paid,t,0.4,1.0),Motion.count(game.race_income.net,t,0.4,1.0)],Vector2(173,613),22,CYAN)
 	_text("钱包 $%d   ·   待缴罚款 $%d   ·   奖金用于购买新摩托"%[game.economy.cash,game.economy.debt],Vector2(173,652),18,MUTED)
 	_text("脱逃  %02d"%game.police.escapes,Vector2(1027,448),19,CYAN)
+	_text("夺取武器 %02d"%game.weapons_claimed,Vector2(969,390),16,CYAN)
 	_text("飞跃 %02d  /  最远 %.0fm"%[game.jumps,game.best_jump],Vector2(969,353),16,CYAN)
 	# Controls keep stable hitboxes throughout the entrance animation.
 	content_alpha=1
@@ -460,6 +464,8 @@ func _roster() -> void:
 		_avatar(i,Rect2(rect.position+Vector2(11,15),Vector2(63,63)))
 		_text(profile.name,rect.position+Vector2(85,42),27,profile.color,title_font)
 		_text(profile.full_name,rect.position+Vector2(85,69),16,WHITE)
+		var weapon_id=game.rivals[i].loadout.current if i<game.rivals.size() else profile.weapon
+		_text(Weapons.data(weapon_id).name,rect.position+Vector2(85,89),12,profile.color)
 		_text(profile.style,rect.position+Vector2(14,107),16,MUTED)
 		var active = i<(game.rivals.size() if not game.menu_backdrop() else game.race_options.ai_count)
 		_text("参赛中" if active else "候补车手",rect.position+Vector2(143,107),13,CYAN if active else MUTED)
@@ -480,6 +486,8 @@ func _profile() -> void:
 	_text(p.full_name+"  /  "+p.city+"  /  %d 岁"%p.age,Vector2(486,312),24,WHITE)
 	_text(p.style+"  ·  "+p.bike,Vector2(486,355),20,CYAN)
 	_paragraph(p.bio,Vector2(486,403),690,20,MUTED)
+	var weapon=Weapons.data(game.rivals[p.id].loadout.current if not game.rivals.is_empty() and p.id<game.rivals.size() else p.weapon)
+	_text("当前武器：%s  /  距离 %.1fm  /  间隔 %.2fs"%[weapon.name,weapon.reach,weapon.cooldown],Vector2(486,445),17,weapon.color)
 	for j in 3:
 		var y = 488+j*59
 		_text(["极速倾向","操控精度","进攻倾向"][j],Vector2(488,y),18,MUTED)
@@ -678,3 +686,38 @@ func _results_backdrop(t: float, success: bool) -> void:
 		for i in 5:
 			var shift=70*(1-Motion.reveal(t,float(i)*0.05,0.5))
 			draw_line(Vector2(1150+shift,290+i*24),Vector2(1350+shift,230+i*24),Color(red,0.2),3,true)
+
+func _weapon_hud(interactive: bool) -> void:
+	var w=Weapons.data(game.loadout.current)
+	var rect=Rect2(997,123,410,119)
+	var edge=w.color if game.weapon_notice>0 else Color("38566a")
+	_panel(rect,Color(0.035,0.08,0.14,0.94),8,edge)
+	if interactive: _hotspot("cycle_weapon",rect)
+	_text("ARSENAL  %02d / %02d"%[game.loadout.items.find(w.id)+1,game.loadout.items.size()],rect.position+Vector2(15,25),15,w.color,number_font)
+	_text(game.controls.label("cycle_weapon")+"  切换",rect.position+Vector2(306,25),15,CYAN)
+	_weapon_icon(w.id,rect.position+Vector2(38,66),w.color)
+	_text(w.name,rect.position+Vector2(80,67),26,WHITE)
+	var next=game.loadout.items[(game.loadout.items.find(w.id)+1)%game.loadout.items.size()]
+	_text("下一项："+Weapons.data(next).name,rect.position+Vector2(80,93),14,MUTED)
+	var cooldown=clampf(game.attack_cooldown/w.cooldown,0,1)
+	draw_rect(Rect2(rect.position+Vector2(15,108),Vector2(380,3)),Color("294454"))
+	draw_rect(Rect2(rect.position+Vector2(15,108),Vector2(380*(1-cooldown),3)),w.color)
+
+func _weapon_icon(id: String, pos: Vector2, color: Color) -> void:
+	if id=="fists":
+		draw_rect(Rect2(pos+Vector2(-15,-9),Vector2(30,23)),color)
+		for i in 4: draw_circle(pos+Vector2(-11+i*7,-10),4.5,color)
+		draw_line(pos+Vector2(-17,0),pos+Vector2(-22,10),color,7,true)
+	elif id=="kick":
+		draw_colored_polygon(PackedVector2Array([pos+Vector2(-13,-19),pos+Vector2(0,-19),pos+Vector2(4,6),pos+Vector2(23,9),pos+Vector2(22,17),pos+Vector2(-12,17)]),color)
+	else:
+		draw_line(pos+Vector2(-15,20),pos+Vector2(10,-19),color,5,true)
+		var kind=Weapons.data(id).kind
+		if kind=="heavy": draw_colored_polygon(PackedVector2Array([pos+Vector2(-1,-22),pos+Vector2(24,-16),pos+Vector2(19,-3),pos+Vector2(-5,-11)]),color)
+		elif kind=="flex":
+			var points=PackedVector2Array()
+			for i in 15: points.append(pos+Vector2(10+sin(i*0.35)*15,-19+i*2.4))
+			draw_polyline(points,color,2.5,true)
+		else:
+			draw_line(pos+Vector2(-1,-18),pos+Vector2(18,-6),color,3,true)
+			draw_colored_polygon(PackedVector2Array([pos+Vector2(5,-17),pos+Vector2(19,-31),pos+Vector2(15,-11)]),color)

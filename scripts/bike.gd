@@ -1,10 +1,16 @@
 extends Node3D
+const Weapons = preload("res://scripts/weapons.gd")
+const WeaponVisual = preload("res://scripts/weapon_visual.gd")
 const Geo = preload("res://scripts/geo.gd")
 var chassis: Node3D
 var rider: Node3D
 var arm_l: Node3D
 var arm_r: Node3D
-var bat: Node3D
+var weapon_visual: Node3D
+var equipped_weapon = "fists"
+var attack_duration = 0.32
+var recoil_time = 0.0
+var recoil_side = 1.0
 var wheels: Array[Node3D] = []
 var flames: Array[Node3D] = []
 var paint = Color("ee6544")
@@ -120,9 +126,7 @@ func build(color: Color, player: bool = false, shape: int = 0) -> void:
 	Geo.box(rider,Vector3(0.06,0.24,0.07),Vector3(0,2.26,0.28),trim)
 	arm_l = _arm(rider,-1,jacket,dark)
 	arm_r = _arm(rider,1,jacket,dark)
-	bat = Geo.cylinder(arm_r,0.057,1.18,Vector3(0,-0.66,-0.35),steel)
-	bat.rotation.x = -0.35
-	bat.visible = false
+	set_weapon("fists")
 	glow = OmniLight3D.new()
 	glow.light_color = Color("56cfff")
 	glow.light_energy = 0
@@ -157,15 +161,29 @@ func animate(dt: float, speed: float, steer: float, boost: bool, time: float) ->
 	rider.rotation.x = lerpf(rider.rotation.x,0.07 if boost else 0.0,dt*8)
 	arm_l.rotation = Vector3.ZERO
 	arm_r.rotation = Vector3.ZERO
+	for leg in legs: leg.rotation=Vector3.ZERO
+	recoil_time=maxf(0,recoil_time-dt)
+	rider.rotation.z=recoil_side*sin(recoil_time/0.28*PI)*0.25
+	var swing=0.0
 	if attack_time > 0:
-		var phase = 1-attack_time/0.36
-		var swing = sin(phase*PI)
+		var phase = clampf(1-attack_time/attack_duration,0,1)
+		swing = sin(phase*PI)
 		var arm = arm_l if attack_side < 0 else arm_r
-		arm.rotation.z = attack_side*1.7*swing
-		arm.rotation.y = -attack_side*0.9*swing
-		bat.visible = attack_side > 0
-	else:
-		bat.visible = false
+		if equipped_weapon=="kick":
+			var leg=legs[0 if attack_side<0 else 1]
+			leg.rotation.z=attack_side*1.25*swing
+			leg.rotation.x=-0.38*swing
+			rider.rotation.z=-attack_side*0.15*swing
+		else:
+			arm.rotation.z = attack_side*1.1*swing
+			arm.rotation.y = -attack_side*0.75*swing
+	if weapon_visual:
+		var side=attack_side if attack_time>0 else 1
+		var hand=arm_l if side<0 else arm_r
+		if weapon_visual.get_parent()!=hand: weapon_visual.reparent(hand,false)
+		weapon_visual.position=Vector3(side*0.16,-0.44,-0.65)
+		weapon_visual.rotation=Vector3(0.45*(1-swing),0,-side*(0.25+2.0*swing))
+		weapon_visual.pose(time,swing)
 	for flame in flames:
 		flame.visible = boost
 		flame.scale.z = 3.5+sin(time*65)*1.5
@@ -173,7 +191,8 @@ func animate(dt: float, speed: float, steer: float, boost: bool, time: float) ->
 
 func swing(side: int) -> void:
 	attack_side = side
-	attack_time = 0.36
+	attack_duration=Weapons.data(equipped_weapon).duration
+	attack_time = attack_duration
 
 func begin_crash(side: float = 1.0) -> void:
 	if recovery_time>0: return
@@ -182,7 +201,7 @@ func begin_crash(side: float = 1.0) -> void:
 	recovery_time = recovery_duration
 	attack_time = 0
 	rider.reparent(self,true)
-	bat.visible = false
+	if weapon_visual: weapon_visual.visible = false
 	for flame in flames: flame.visible = false
 	glow.light_energy = 0
 
@@ -192,6 +211,7 @@ func reset_pose() -> void:
 	recovery_stage = ""
 	down_time = 0
 	attack_time = 0
+	recoil_time=0
 	if rider.get_parent()!=chassis: rider.reparent(chassis,false)
 	rider.position = Vector3(0,1.4,0.2)
 	rider.rotation = Vector3.ZERO
@@ -200,7 +220,7 @@ func reset_pose() -> void:
 	for leg in legs: leg.rotation = Vector3.ZERO
 	arm_l.rotation = Vector3.ZERO
 	arm_r.rotation = Vector3.ZERO
-	bat.visible = false
+	if weapon_visual: weapon_visual.visible = Weapons.armed(equipped_weapon)
 	for flame in flames: flame.visible = false
 
 func _animate_recovery(dt: float) -> void:
@@ -247,3 +267,19 @@ func _animate_recovery(dt: float) -> void:
 		arm_l.rotation = Vector3.ZERO
 		arm_r.rotation = Vector3.ZERO
 	if recovery_time<=0: reset_pose()
+
+func set_weapon(id: String) -> void:
+	equipped_weapon=Weapons.data(id).id
+	if is_instance_valid(weapon_visual):
+		weapon_visual.get_parent().remove_child(weapon_visual)
+		weapon_visual.queue_free()
+	weapon_visual=WeaponVisual.new()
+	arm_r.add_child(weapon_visual)
+	weapon_visual.build(equipped_weapon)
+	weapon_visual.position=Vector3(0.16,-0.44,-0.65)
+	weapon_visual.rotation=Vector3(0.45,0,-0.25)
+	if recovery_time>0: weapon_visual.visible=false
+
+func react_to_hit(side: float) -> void:
+	recoil_time=0.28
+	recoil_side=side

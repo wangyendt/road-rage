@@ -26,5 +26,9 @@ grep -q 'FEEDBACK_UI_TEST_RESULTS passed=11 failed=0' "$ROOT/builds/test-logs/fe
 grep -q 'TERRAIN_TEST_RESULTS passed=29 failed=0' "$ROOT/builds/test-logs/terrain.log"
 "$GODOT" --path "$ROOT" --script tests/test_terrain_ui.gd 2>&1 | tee "$ROOT/builds/test-logs/terrain-ui.log"
 grep -q 'TERRAIN_UI_TEST_RESULTS passed=16 failed=0' "$ROOT/builds/test-logs/terrain-ui.log"
-if grep -E '^(SCRIPT ERROR:|ERROR:)'  "$ROOT/builds/test-logs/"*.log; then exit 1; fi
-printf '\nAll 262 assertions passed.\n'
+"$GODOT" --headless --path "$ROOT" --script tests/test_weapons.gd 2>&1 | tee "$ROOT/builds/test-logs/weapons.log"
+grep -q 'WEAPON_TEST_RESULTS passed=42 failed=0' "$ROOT/builds/test-logs/weapons.log"
+"$GODOT" --path "$ROOT" --script tests/test_weapons_ui.gd 2>&1 | tee "$ROOT/builds/test-logs/weapons-ui.log"
+grep -q 'WEAPON_UI_TEST_RESULTS passed=15 failed=0' "$ROOT/builds/test-logs/weapons-ui.log"
+if grep -E '^(SCRIPT ERROR:|ERROR:)'   "$ROOT/builds/test-logs/"*.log; then exit 1; fi
+printf '\nAll 319 assertions passed.\n'

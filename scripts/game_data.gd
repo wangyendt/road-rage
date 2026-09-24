@@ -1,4 +1,5 @@
 extends RefCounted
+const Weapons=preload("res://scripts/weapons.gd")
 ## Original rider identities and genuinely different race locations.
 const COURSES = [
 	{"id":"harbor","name":"港湾高架","en":"HARBOR RUN","length":5400.0,"subtitle":"落日海湾 / 跨海桥梁","description":"宽阔高架与长直道，适合贴身缠斗和氮气超车。","color":Color("ffad78"),"curve":[31.0,0.0017,12.0,0.0039],"traffic":1.0},
@@ -44,5 +45,5 @@ static func riders() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	for i in rows.size():
 		var r = rows[i]
-		out.append({"id":i,"name":r[0],"full_name":r[1],"city":r[2],"age":r[3],"style":r[4],"bike":r[5],"pace":r[6],"handling":r[7],"aggression":r[8],"color":Color(r[9]),"bio":r[10]})
+		out.append({"weapon":Weapons.ROSTER[i],"id":i,"name":r[0],"full_name":r[1],"city":r[2],"age":r[3],"style":r[4],"bike":r[5],"pace":r[6],"handling":r[7],"aggression":r[8],"color":Color(r[9]),"bio":r[10]})
 	return out

@@ -24,8 +24,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <key>CFBundleIdentifier</key><string>local.wayne.roadrage</string>
 <key>CFBundleExecutable</key><string>RoadRage</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>4.0.0</string>
-<key>CFBundleVersion</key><string>4.0.0</string>
+<key>CFBundleShortVersionString</key><string>4.1.0</string>
+<key>CFBundleVersion</key><string>4.1.0</string>
 <key>CFBundleIconFile</key><string>GameIcon</string>
 <key>LSMinimumSystemVersion</key><string>13.0</string>
 <key>LSApplicationCategoryType</key><string>public.app-category.racing-games</string>

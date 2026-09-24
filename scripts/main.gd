@@ -10,6 +10,11 @@ const Data = preload("res://scripts/game_data.gd")
 const Director = preload("res://scripts/race_director.gd")
 const Economy = preload("res://scripts/economy.gd")
 const Police = preload("res://scripts/police.gd")
+const Weapons = preload("res://scripts/weapons.gd")
+const Loadout = preload("res://scripts/loadout.gd")
+var loadout = Loadout.new()
+var weapons_claimed = 0
+var weapon_notice = 0.0
 const RidePhysics = preload("res://scripts/ride_physics.gd")
 const TrafficData = preload("res://scripts/traffic_data.gd")
 var ride = RidePhysics.new()
@@ -206,6 +211,7 @@ func _input(event: InputEvent) -> void:
 			if event.is_action_pressed("attack_left"): attack(-1)
 			if event.is_action_pressed("attack_right"): attack(1)
 			if event.is_action_pressed("attack_auto"): attack(_nearest_side())
+			if event.is_action_pressed("cycle_weapon"): cycle_weapon()
 	elif event is InputEventJoypadButton and event.pressed:
 		if event.button_index==JOY_BUTTON_A: hud.activate_selected()
 		elif event.button_index==JOY_BUTTON_B: back()
@@ -272,6 +278,9 @@ func _process(raw_dt: float) -> void:
 
 func start_race() -> void:
 	_clear_race()
+	loadout=Loadout.new()
+	weapons_claimed=0
+	weapon_notice=0
 	_apply_bike()
 	race_income={"gross":0,"debt_paid":0,"net":0}
 	race_fine={"gross":0,"paid":0,"unpaid":0}
@@ -327,10 +336,11 @@ func start_race() -> void:
 		var bike = Bike.new()
 		add_child(bike)
 		bike.build(profile.color,false,i%8)
+		bike.set_weapon(profile.weapon)
 		var start_lane = [-6.75,-2.25,2.25,6.75][i%4]
 		var rival_ride=RidePhysics.new()
 		rival_ride.reset(world,9.0+int(i/4)*8.0)
-		rivals.append({"ride":rival_ride,"id":i,"profile":profile,"node":bike,"name":profile.name,"color":profile.color,"distance":9.0+int(i/4)*8.0,"lane":start_lane,"speed":0.0,"cruise":Data.difficulty(active_level).pace,"hp":2,"stun":0.0,"cooldown":2.5+i*0.17,"windup":0.0,"phase":float(i)*1.5,"finished":false,"finish_time":0.0,"nitro":100.0,"burst":0.0,"burst_cd":4.0+i*0.6,"think":0.0,"target_lane":start_lane,"target_id":-2,"hit_cd":0.0,"crashes":0,"attacks":0})
+		rivals.append({"loadout":Loadout.new(profile.weapon),"ride":rival_ride,"id":i,"profile":profile,"node":bike,"name":profile.name,"color":profile.color,"distance":9.0+int(i/4)*8.0,"lane":start_lane,"speed":0.0,"cruise":Data.difficulty(active_level).pace,"hp":2,"stun":0.0,"cooldown":2.5+i*0.17,"windup":0.0,"phase":float(i)*1.5,"finished":false,"finish_time":0.0,"nitro":100.0,"burst":0.0,"burst_cd":4.0+i*0.6,"think":0.0,"target_lane":start_lane,"target_id":-2,"hit_cd":0.0,"crashes":0,"attacks":0})
 	_spawn_traffic(155,-6.75)
 	_spawn_traffic(230,2.25)
 	_spawn_pickup(105,2.25,"nitro")
@@ -349,6 +359,7 @@ func _clear_race() -> void:
 func _simulate(dt: float) -> void:
 	if not Input.is_action_pressed("boost") and not auto_drive: boost_lock=false
 	var previous_distance=distance
+	weapon_notice=maxf(0,weapon_notice-dt)
 	elapsed += dt
 	attack_cooldown = maxf(0,attack_cooldown-dt)
 	damage_cooldown = maxf(0,damage_cooldown-dt)
@@ -495,15 +506,15 @@ func _simulate_rival(r: Dictionary, dt: float) -> void:
 	if r.windup>0:
 		r.windup -= dt
 		if r.windup<=0:
-			r.cooldown = d.attack_cd*(1.3-r.profile.aggression*0.5)+rng.randf()
+			r.cooldown = d.attack_cd*(1.3-r.profile.aggression*0.5)*clampf(Weapons.data(r.loadout.current).cooldown/0.6,0.8,1.6)+rng.randf()
 			_resolve_ai_attack(r)
 	elif r.cooldown<=0 and r.stun<=0:
 		r.target_id = -2
-		if absf(gap)<5.4 and absf(r.lane-lane)<3.0 and player.recovery_time<=0:
+		if Weapons.reaches(r.loadout.current,r.lane-lane,gap,r.ride.y-ride.y) and player.recovery_time<=0:
 			r.target_id = -1
 		elif r.profile.aggression>0.65:
 			for other in rivals:
-				if other.id!=r.id and other.hp>0 and other.node.recovery_time<=0 and absf(other.distance-r.distance)<4.2 and absf(other.lane-r.lane)<2.6:
+				if other.id!=r.id and other.hp>0 and other.node.recovery_time<=0 and Weapons.reaches(r.loadout.current,other.lane-r.lane,other.distance-r.distance,other.ride.y-r.ride.y):
 					r.target_id = other.id
 					break
 		if r.target_id != -2: r.windup = d.reaction
@@ -542,22 +553,32 @@ func _choose_ai_lane(r: Dictionary, d: Dictionary) -> float:
 
 func _resolve_ai_attack(r: Dictionary) -> void:
 	if r.stun>0 or r.node.recovery_time>0: return
+	var w=Weapons.data(r.loadout.current)
 	if r.target_id == -1:
-		if absf(r.ride.y-ride.y)<1.4 and absf(r.distance-distance)<5.3 and absf(r.lane-lane)<3.4 and player.recovery_time<=0:
+		if Weapons.reaches(w.id,r.lane-lane,r.distance-distance,r.ride.y-ride.y) and player.recovery_time<=0:
 			r.node.swing(-1 if r.lane>lane else 1)
-			take_damage(12,"%s 的攻击"%r.name)
-			r.attacks += 1
+			var previous_health=health
+			take_damage(w.rider_damage,"%s · %s"%[r.name,w.name])
+			if health<previous_health:
+				var side=1.0 if lane>r.lane else -1.0
+				lane=clampf(lane+side*w.shove*0.4,-8.5,8.5)
+				player.react_to_hit(side)
+				r.attacks += 1
 	elif r.target_id>=0 and r.target_id<rivals.size():
 		var other = rivals[r.target_id]
-		if absf(r.ride.y-other.ride.y)<1.4 and absf(r.distance-other.distance)<5 and absf(r.lane-other.lane)<3.2 and other.hit_cd<=0 and other.node.recovery_time<=0:
-			r.node.swing(-1 if r.lane>other.lane else 1)
-			other.hp -= 1
-			other.stun = 0.3
+		if Weapons.reaches(w.id,r.lane-other.lane,r.distance-other.distance,r.ride.y-other.ride.y) and other.hit_cd<=0 and other.node.recovery_time<=0:
+			var side=1 if other.lane>r.lane else -1
+			r.node.swing(side)
+			other.hp -= w.damage
+			other.stun = w.stagger
 			other.hit_cd = 0.7
 			other.windup = 0
+			other.lane=clampf(other.lane+side*w.shove*0.5,-8.5,8.5)
+			other.node.react_to_hit(side)
 			r.attacks += 1
-			if absf(other.distance-distance)<80: fx.burst(other.node.position+Vector3(0,1.5,0),Color("ffc989"))
-			if other.hp<=0: _crash_rival(other,1 if other.lane>r.lane else -1)
+			sound.rider_hit(other.id,absf(other.distance-distance),other.hp<=0)
+			if absf(other.distance-distance)<80: fx.burst(other.node.position+Vector3(0,1.5,0),w.color)
+			if other.hp<=0: _crash_rival(other,side)
 
 func _crash_rival(r: Dictionary, side: float) -> void:
 	if r.node.recovery_time>0: return
@@ -665,26 +686,28 @@ func _spawn_pickup(at: float, x: float, kind: String) -> void:
 
 func attack(side: int) -> void:
 	if state != "race" or attack_cooldown > 0 or player.recovery_time>0: return
-	attack_cooldown = 0.43
+	var w=Weapons.data(loadout.current)
+	attack_cooldown = w.cooldown
 	player.swing(side)
-	fx.slash(player.position+Vector3(0,1.55,-0.05),side)
-	sound.sfx("swing",-6,rng.randf_range(0.94,1.1))
+	fx.slash(player.position+Vector3(0,1.55,-0.05),side,w.color,w.reach)
+	sound.sfx("whip" if w.kind=="flex" else "swing",-7,1.15 if w.kind=="punch" else (0.75 if w.kind=="heavy" else 1.0))
 	var nearest: Dictionary = {}
 	var nearest_d = 100.0
 	for r in rivals:
 		var dx = r.lane-lane
 		var dz = absf(r.distance-distance)
-		if dx*side >= -0.25 and absf(dx)<3.5 and dz<6.4 and r.hp>0 and absf(r.ride.y-ride.y)<1.4:
+		if Weapons.reaches(w.id,dx,dz,r.ride.y-ride.y,side) and r.hp>0 and r.hit_cd<=0 and r.node.recovery_time<=0:
 			if dz+absf(dx)<nearest_d:
 				nearest = r
 				nearest_d = dz+absf(dx)
 	if nearest.is_empty(): return
 	var r = nearest
-	r.hp -= 1
+	r.hp -= w.damage
 	r.windup = 0
 	r.cooldown = 2.4
-	r.stun = 0.22 if active_level==5 else 0.45
-	r.lane = clampf(r.lane+side*0.7,-8.4,8.4)
+	r.stun = w.stagger*(0.65 if active_level==5 else 1.0)
+	r.lane = clampf(r.lane+side*w.shove,-8.4,8.4)
+	r.node.react_to_hit(side)
 	hits += 1
 	combo += 1
 	combo_time = 5.0
@@ -694,7 +717,8 @@ func attack(side: int) -> void:
 	shake = 0.36
 	flash = 1
 	var heavy = r.hp<=0
-	fx.burst(r.node.position+Vector3(0,1.6,0),Color("ffe29c"),heavy)
+	sound.rider_hit(r.id,absf(r.distance-distance),heavy)
+	fx.burst(r.node.position+Vector3(0,1.6,0),w.color,heavy)
 	if heavy:
 		takedowns += 1
 		score += 350*mini(combo,5)
@@ -702,10 +726,13 @@ func attack(side: int) -> void:
 		sound.sfx("crash",-2)
 		shake = 0.65
 		hitstop = 0.10
-		announce("击倒  /  "+r.name,"+%d 分  ·  %d 连击" % [350*mini(combo,5),combo],Color("ffc271"),1.6)
+		var loot=claim_weapon(r)
+		if not loot.is_empty():
+			announce("击倒 %s · 夺得%s"%[r.name,Weapons.data(loot).name],"已自动装备 · %s 切换拳脚 / 已夺武器"%controls.label("cycle_weapon"),Weapons.data(loot).color,2.4)
+		else: announce("击倒  /  "+r.name,"+%d 分  ·  %d 连击" % [350*mini(combo,5),combo],Color("ffc271"),1.6)
 	else:
 		sound.sfx("hit",-1,rng.randf_range(0.9,1.08))
-		announce("重击命中","再来一击，放倒对手  /  氮气 +12",Color("d7f9f5"),0.9)
+		announce(w.name+"命中","再来一击，放倒对手  /  氮气 +12",Color("d7f9f5"),0.9)
 	if Input.get_connected_joypads().size()>0:
 		Input.start_joy_vibration(Input.get_connected_joypads()[0],0.5,0.8,0.16)
 
@@ -730,6 +757,7 @@ func take_damage(amount: float, cause: String) -> void:
 	impact_meter += amount
 	fx.burst(player.position+Vector3(0,0.8,0),Color("ff9a56"),true)
 	sound.sfx("crash",-5,1.15)
+	sound.rider_hit(-1,0,amount>=20)
 	if health>0 and (amount>=20 or impact_meter>=32):
 		trigger_crash()
 	else:
@@ -888,6 +916,7 @@ func ui_action(action: String) -> void:
 			"courses_prev": course_page=posmod(course_page-1,ceili(Data.COURSES.size()/4.0))
 			"bikes_next": bike_page=posmod(bike_page+1,ceili(Economy.BIKES.size()/4.0))
 			"bikes_prev": bike_page=posmod(bike_page-1,ceili(Economy.BIKES.size()/4.0))
+			"cycle_weapon": cycle_weapon()
 			"ai_minus": race_options.ai_count = maxi(1,race_options.ai_count-1)
 			"ai_plus": race_options.ai_count = mini(15,race_options.ai_count+1)
 			"ai_max": race_options.ai_count = 15
@@ -973,7 +1002,7 @@ func _test_step(dt: float) -> void:
 		screenshot_at = -1
 		_capture.call_deferred()
 	if quit_after>0 and test_elapsed>quit_after:
-		print("SMOKE_RESULT ",JSON.stringify({"state":state,"distance":distance,"health":health,"hits":hits,"takedowns":takedowns,"traffic":traffic.size(),"fps":Engine.get_frames_per_second(),"score":score,"rank":final_rank,"reason":finish_reason,"prize":race_income.gross,"fine":race_fine.gross,"cash":economy.cash,"bike":active_bike.id,"escapes":police.escapes,"jumps":jumps,"best_jump":best_jump}))
+		print("SMOKE_RESULT ",JSON.stringify({"state":state,"distance":distance,"health":health,"hits":hits,"takedowns":takedowns,"traffic":traffic.size(),"fps":Engine.get_frames_per_second(),"score":score,"rank":final_rank,"reason":finish_reason,"prize":race_income.gross,"fine":race_fine.gross,"cash":economy.cash,"bike":active_bike.id,"escapes":police.escapes,"jumps":jumps,"best_jump":best_jump,"weapon":loadout.current,"weapons_claimed":weapons_claimed}))
 		request_quit()
 
 func _capture() -> void:
@@ -1041,8 +1070,30 @@ func _apply_bike() -> void:
 	player=Bike.new()
 	add_child(player)
 	player.build(active_bike.color,true,active_bike.shape)
+	player.set_weapon(loadout.current)
 
 func arrest_player() -> void:
 	if state!="race" or player.recovery_time<=0 or player.recovery_elapsed<0.85: return
 	race_fine=economy.fine(350+active_level*150)
 	finish_race("busted")
+
+func cycle_weapon() -> void:
+	if state!="race" or player.recovery_time>0: return
+	if player.attack_time>0 or attack_cooldown>0:
+		return # Switching cannot cancel a heavy weapon's recovery/cooldown.
+	loadout.cycle()
+	player.set_weapon(loadout.current)
+	weapon_notice=0.8
+	sound.sfx("click",-12,1.1)
+
+func claim_weapon(r: Dictionary) -> String:
+	if r.hp>0 or r.node.recovery_time<=0: return ""
+	var id=loadout.take_from(r.loadout)
+	if id.is_empty(): return ""
+	weapons_claimed+=1
+	player.set_weapon(id)
+	r.node.set_weapon(r.loadout.current)
+	weapon_notice=2.0
+	fx.weapon_claim(r.node.position+Vector3(0,1.6,0),player.position+Vector3(0,1.6,0),Weapons.data(id).color)
+	sound.sfx("pickup",-8,0.9)
+	return id

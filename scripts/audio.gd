@@ -1,4 +1,6 @@
 extends Node
+var last_rider_hit: Dictionary = {}
+var rider_hit_count = 0
 var engine: AudioStreamPlayer
 var airflow: AudioStreamPlayer
 var siren: AudioStreamPlayer
@@ -16,7 +18,7 @@ var siren_pitch = 1.0
 func _ready() -> void:
 	AudioServer.set_bus_layout(load("res://assets/default_bus_layout.tres"))
 	if DisplayServer.get_name()=="headless": return
-	for key in ["hit","crash","swing","nitro","click","count","go","pickup","finish","defeat","landing"]:
+	for key in ["hit","crash","swing","nitro","click","count","go","pickup","finish","defeat","landing","pain0","pain1","pain2","whip"]:
 		sounds[key] = load("res://assets/audio/"+key+".wav")
 	for i in 12:
 		var p = AudioStreamPlayer.new()
@@ -94,3 +96,13 @@ func update_air_audio(dt: float, speed: float, airborne: bool) -> void:
 	var gain=clampf(speed/130.0,0,1)*0.75 if airborne else 0.0
 	airflow.volume_linear=lerpf(airflow.volume_linear,gain,1-exp(-dt*5))
 	airflow.pitch_scale=0.85+speed/300.0
+
+func rider_hit(id: int, separation: float = 0.0, heavy: bool = false) -> void:
+	if separation>90: return
+	var voice=posmod(id,3) if id>=0 else 0
+	var pitch=0.86+posmod(id,5)*0.065 if id>=0 else 1.04
+	if heavy: pitch*=0.92
+	var gain=1-clampf(separation/100.0,0,0.9)
+	last_rider_hit={"id":id,"sound":"pain%d"%voice,"pitch":pitch,"heavy":heavy,"gain":gain}
+	rider_hit_count+=1
+	sfx(last_rider_hit.sound,-5.0+linear_to_db(maxf(0.1,gain)),pitch)
