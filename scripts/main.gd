@@ -859,11 +859,16 @@ func _update_camera(dt: float) -> void:
 		target_pos = Vector3(lane*0.72,3.5 if not boost_active else 3.1,7.0 if not boost_active else 7.5)
 		target_pos.y+=ride.height
 		target_pos.y=maxf(target_pos.y,world.height_at(distance-8)-world.height_at(distance)+2.8)
-		look = Vector3(lane*0.7+steer*1.2,1.35+ride.height*0.75+world.height_at(distance+16)-world.height_at(distance),-16)
-		if ride.height>15:
-			target_pos.y+=minf((ride.height-15)*0.04,2.5)
-			target_pos.z+=minf((ride.height-15)*0.045,4.0)
-			look.y=1.35+ride.height-minf(ride.height*0.08,5.0)+clampf(world.height_at(distance+16)-world.height_at(distance),-6,6)
+		var road_ahead=world.height_at(distance+16)-world.height_at(distance)
+		var ground_look=1.35+ride.height*0.75+road_ahead
+		var flight_look=1.35+ride.height-minf(ride.height*0.08,5.0)+clampf(road_ahead,-6,6)
+		# Blend the reference targets, not the camera's world-space height.
+		# A hard switch at 15 m caused 4–6 degree cuts on ascent AND descent.
+		var flight_mix=smoothstep(5.0,35.0,ride.height)
+		look = Vector3(lane*0.7+steer*1.2,lerpf(ground_look,flight_look,flight_mix),-16)
+		var high_clearance=maxf(0,ride.height-15)
+		target_pos.y+=minf(high_clearance*0.04,2.5)
+		target_pos.z+=minf(high_clearance*0.045,4.0)
 		var fov_target = 69+speed/74*9+(7 if boost_active else 0)
 		camera.fov = lerpf(camera.fov,fov_target,clampf(dt*4,0,1))
 	if player.recovery_time>0 and not menu_view:

@@ -1,4 +1,4 @@
-# ROAD RAGE · 极限狂飙 v4.4
+# ROAD RAGE · 极限狂飙 v4.4.1
 
 可从菜单玩到结算的 **3D 单机摩托竞速格斗游戏**。原创程序化模型、合成音效和电子配乐；Godot 4，面向 Apple Silicon Mac。
 
@@ -10,6 +10,12 @@
 - 构建目标 macOS 13+ / arm64；验证机器为 M1 Max、macOS 26.6、Godot 4.7.2。
 
 开始游戏后先选择场景、短/中/长赛程、1–15 名 AI 和 1–5 级难度，再开始竞赛。
+
+## v4.4.1 腾空镜头修复
+
+- 修复上升 / 下落 / 连弹经过离地 15 m 时的镜头硬切：地面前视与高空跟随在 5–35 m 间连续混合，保留高空竖直跟随，不改变物理高度或反弹。
+- 大跳玩法：赛前翻到第三页选“云端天路”等高差地图，在陡坡前用氮气提速（默认 Space），过坡顶时不要刹车；没有单独跳跃键。起始车也能起飞，“弹簧侠”更适合体验落地连弹。
+- 复现数据、30/60/120 Hz 回归和未归因的偶发长帧说明见 `docs/FLIGHT_CAMERA.md`。
 
 ## v4.4 追捕视觉、分支结算与音效
 
@@ -170,7 +176,7 @@ assets/                  原创音频、纹理、图标及许可
   --autoplay --ai=15 --level=5 --course=3 --distance=long --quit-after=110
 ```
 
-测试脚本覆盖 486 项逻辑和真实渲染输入断言。详情见 `docs/QA.md`；策略说明见 `docs/DESIGN.md`。`--course=0..11` 对应上表顺序。
+测试脚本覆盖 519 项逻辑和真实渲染输入断言。详情见 `docs/QA.md`；策略说明见 `docs/DESIGN.md`。`--course=0..11` 对应上表顺序。
 
 构建需要已安装 Godot 与 Xcode 命令行工具，可用 `GODOT_BIN` 指定引擎。输出 `builds/Road Rage.app` 和 `builds/RoadRage-macOS-AppleSilicon.zip`。
 
