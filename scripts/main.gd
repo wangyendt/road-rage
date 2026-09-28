@@ -19,6 +19,10 @@ const RidePhysics = preload("res://scripts/ride_physics.gd")
 const TrafficData = preload("res://scripts/traffic_data.gd")
 var ride = RidePhysics.new()
 var jumps = 0
+var bounces = 0
+var rebound_timer = 0.0
+var rebound_chain = 0
+var rebound_power = 0.0
 var best_jump = 0.0
 var course_page = 0
 var bike_page = 0
@@ -100,6 +104,7 @@ var catchup_help = 0.0
 var crashes = 0
 var impact_meter = 0.0
 var recovery_was_active = false
+var camera_height_anchor = 0.0
 var records: Dictionary = {}
 var economy = Economy.new()
 var police: Node3D
@@ -263,7 +268,7 @@ func _process(raw_dt: float) -> void:
 			sim_dt *= 0.12
 		_simulate(sim_dt)
 	if state in ["race","countdown","finished"]:
-		world.update_track(distance,track_length,total_time)
+		world.update_track(distance,track_length,total_time,ride.height)
 		_update_entities()
 	if state in ["race","countdown","finished"] or menu_backdrop():
 		_update_camera(dt)
@@ -298,8 +303,12 @@ func start_race() -> void:
 	return_state = "menu"
 	distance = 0
 	ride = RidePhysics.new()
+	ride.configure(active_bike)
 	ride.reset(world,0)
 	jumps=0
+	bounces=0
+	rebound_timer=0
+	rebound_chain=0
 	best_jump=0
 	lane = 0
 	speed = 0
@@ -339,16 +348,17 @@ func start_race() -> void:
 		var profile = profiles[i]
 		var bike = Bike.new()
 		add_child(bike)
-		bike.build(profile.color,false,i%8)
+		bike.build(profile.color,false,i%Economy.BIKES.size())
 		bike.set_weapon(profile.weapon)
 		var start_lane = [-6.75,-2.25,2.25,6.75][i%4]
 		var rival_ride=RidePhysics.new()
+		rival_ride.configure(Economy.BIKES[i%Economy.BIKES.size()])
 		rival_ride.reset(world,9.0+int(i/4)*8.0)
 		rivals.append({"loadout":Loadout.new(profile.weapon),"ride":rival_ride,"id":i,"profile":profile,"node":bike,"name":profile.name,"color":profile.color,"distance":9.0+int(i/4)*8.0,"lane":start_lane,"speed":0.0,"cruise":Data.difficulty(active_level).pace,"hp":2,"stun":0.0,"cooldown":2.5+i*0.17,"windup":0.0,"phase":float(i)*1.5,"finished":false,"finish_time":0.0,"nitro":100.0,"burst":0.0,"boosts_used":0,"boost_reason":"","burst_cd":4.0+i*0.6,"think":0.0,"target_lane":start_lane,"target_id":-2,"hit_cd":0.0,"crashes":0,"attacks":0})
 	_spawn_traffic(155,-6.75)
 	_spawn_traffic(230,2.25)
 	_spawn_pickup(105,2.25,"nitro")
-	world.update_track(distance,track_length,total_time)
+	world.update_track(distance,track_length,total_time,ride.height)
 	_update_entities()
 	_update_camera(1)
 
@@ -365,6 +375,7 @@ func _simulate(dt: float) -> void:
 	var previous_distance=distance
 	weapon_notice=maxf(0,weapon_notice-dt)
 	elapsed += dt
+	rebound_timer=maxf(0,rebound_timer-dt)
 	attack_cooldown = maxf(0,attack_cooldown-dt)
 	damage_cooldown = maxf(0,damage_cooldown-dt)
 	combo_time = maxf(0,combo_time-dt)
@@ -411,7 +422,7 @@ func _simulate(dt: float) -> void:
 		if absf(lane)>limit-0.2: target = 40
 		speed = move_toward(speed,target,dt*(42*grip if brake else active_bike.accel+catchup_help))
 		steer = lerpf(steer,input_steer,1-exp(-dt*9*grip))
-		lane += steer*dt*(active_bike.handling*grip*(0.35 if ride.airborne else 1.0)*(1.12 if boost_active else 1.0))
+		lane += steer*dt*(active_bike.handling*grip*(active_bike.get("air_control",0.35) if ride.airborne else 1.0)*(1.12 if boost_active else 1.0))
 		lane += sin(distance*0.0039)*speed*dt*0.0025
 		if absf(lane)>limit:
 			lane = clampf(lane,-limit-0.1,limit+0.1)
@@ -420,21 +431,32 @@ func _simulate(dt: float) -> void:
 		player.position = Vector3(lane,0,0)
 		player.rotation.y = -steer*0.09
 		player.animate(dt,speed,steer,boost_active,total_time)
-	var landing=ride.step(world,previous_distance,distance,speed,dt,player.recovery_time>0)
-	if landing.landed and landing.time>0.3 and landing.peak>0.45:
-		jumps+=1
-		best_jump=maxf(best_jump,landing.distance)
+	var contact_event=ride.step(world,previous_distance,distance,speed,dt,player.recovery_time>0)
+	if contact_event.landed: speed=contact_event.forward_speed
+	for landing in contact_event.contacts:
+		if player.recovery_time>0: continue
+		if landing.time<=0.12 or landing.peak<=0.08: continue
+		if landing.chain==0 and landing.time>0.3 and landing.peak>0.45:
+			jumps+=1
+			best_jump=maxf(best_jump,landing.distance)
 		var safe=active_bike.get("suspension",22.0)
-		shake=maxf(shake,minf(0.75,landing.impact/45.0))
-		sound.sfx("landing",-9+minf(landing.impact/6,4),1.0)
-		fx.burst(Vector3(lane,0.2,0),Color("d9d2a9"))
-		if landing.impact>safe:
-			take_damage(minf(30,(landing.impact-safe)*1.35),"重落地")
-			announce("落地冲击","冲坡前减速，或换用长行程悬挂",Color("ffb275"),1.4)
-		else:
+		# Only the dissipated fraction shocks the suspension; no extra bounce damage.
+		var absorbed=landing.impact*sqrt(1.0-ride.restitution*ride.restitution)
+		shake=maxf(shake,minf(0.75,absorbed/55.0))
+		sound.sfx("landing",-12+minf(landing.impact/6,7),1.0+minf(landing.chain,4)*0.1)
+		if landing.bounced and player.recovery_time<=0:
+			bounces+=1
+			rebound_timer=1.15
+			rebound_chain=landing.chain+1
+			rebound_power=clampf(landing.outgoing/30.0,0.2,1)
+			fx.rebound(Vector3(lane,0.12,0),Color("ffbc66"),rebound_power)
+		if absorbed>safe and landing.chain==0:
+			take_damage(minf(30,(absorbed-safe)*1.35),"重落地")
+			announce("落地冲击","冲坡前减速，或换用高缓冲悬挂",Color("ffb275"),1.4)
+		elif landing.chain==0 and landing.time>0.3 and landing.peak>0.45:
 			score+=150
 			nitro=minf(100,nitro+8)
-			announce("稳稳落地","飞跃 %.0fm · 腾空 %.1fs · +150 分"%[landing.distance,landing.time],Color("c6f2cb"),1.6)
+			if not landing.bounced: announce("稳稳落地","飞跃 %.0fm · +150 分"%landing.distance,Color("c6f2cb"),1.6)
 	for rival in rivals: _simulate_rival(rival,dt)
 	_simulate_traffic(dt)
 	_simulate_pickups(dt)
@@ -471,6 +493,7 @@ func _simulate_rival(r: Dictionary, dt: float) -> void:
 		r.node.animate(dt,r.speed,0,false,total_time)
 		r.ride.step(world,previous_distance,r.distance,r.speed,dt,true)
 		if r.node.recovery_time<=0:
+			r.ride.reset(world,r.distance,r.speed)
 			r.hp = 2
 			r.stun = 0
 			r.hit_cd = 1.5
@@ -509,6 +532,7 @@ func _simulate_rival(r: Dictionary, dt: float) -> void:
 	r.speed = move_toward(r.speed,target,dt*((25.0 if active_level==5 else 17.0)+r.profile.pace*6))
 	r.distance += r.speed*dt
 	var landing=r.ride.step(world,previous_distance,r.distance,r.speed,dt)
+	if landing.landed: r.speed=landing.forward_speed
 	if landing.landed and landing.impact>29: r.stun=maxf(r.stun,0.8)
 	var old_lane = r.lane
 	if r.stun<=0: r.lane = move_toward(r.lane,r.target_lane,dt*d.handling*world.grip_at(r.distance)*(0.35 if r.ride.airborne else 1.0)*(0.65+r.profile.handling*0.45))
@@ -793,6 +817,7 @@ func take_damage(amount: float, cause: String) -> void:
 
 func trigger_crash() -> void:
 	if player.recovery_time>0: return
+	rebound_timer=0
 	crashes += 1
 	impact_meter = 0
 	boost_active = false
@@ -831,12 +856,20 @@ func _update_camera(dt: float) -> void:
 		target_pos.y+=ride.height
 		target_pos.y=maxf(target_pos.y,world.height_at(distance-8)-world.height_at(distance)+2.8)
 		look = Vector3(lane*0.7+steer*1.2,1.35+ride.height*0.75+world.height_at(distance+16)-world.height_at(distance),-16)
+		if ride.height>15:
+			target_pos.y+=minf((ride.height-15)*0.04,2.5)
+			target_pos.z+=minf((ride.height-15)*0.045,4.0)
+			look.y=1.35+ride.height-minf(ride.height*0.08,5.0)+clampf(world.height_at(distance+16)-world.height_at(distance),-6,6)
 		var fov_target = 69+speed/74*9+(7 if boost_active else 0)
 		camera.fov = lerpf(camera.fov,fov_target,clampf(dt*4,0,1))
 	if player.recovery_time>0 and not menu_view:
 		target_pos = Vector3(lane+1.8,maxf(4.0+ride.height,world.height_at(distance-9)-world.height_at(distance)+2.8),8.8)
 		look = Vector3(lane,1.0+ride.height,-2.0)
 		camera.fov = lerpf(camera.fov,65,clampf(dt*4,0,1))
+	# Track the rider's vertical reference immediately; smooth only camera offset.
+	# Otherwise rapid 60m+ climbs leave the camera below the bike for several frames.
+	if not menu_view: camera.position.y+=ride.height-camera_height_anchor
+	camera_height_anchor=0.0 if menu_view else ride.height
 	camera.position = camera.position.lerp(target_pos,1-exp(-dt*7))
 	if settings.shake and shake>0:
 		camera.position += Vector3(sin(total_time*95),cos(total_time*83),0)*shake*0.19
@@ -1038,7 +1071,7 @@ func _test_step(dt: float) -> void:
 		screenshot_at = -1
 		_capture.call_deferred()
 	if quit_after>0 and test_elapsed>quit_after:
-		print("SMOKE_RESULT ",JSON.stringify({"state":state,"distance":distance,"track_length":track_length,"distance_class":Data.DISTANCE_IDS[active_distance],"ai_boosts":rivals.reduce(func(total,r): return total+r.boosts_used,0),"health":health,"hits":hits,"takedowns":takedowns,"traffic":traffic.size(),"fps":Engine.get_frames_per_second(),"score":score,"rank":final_rank,"reason":finish_reason,"prize":race_income.gross,"fine":race_fine.gross,"cash":economy.cash,"bike":active_bike.id,"escapes":police.escapes,"jumps":jumps,"best_jump":best_jump,"weapon":loadout.current,"weapons_claimed":weapons_claimed}))
+		print("SMOKE_RESULT ",JSON.stringify({"state":state,"distance":distance,"track_length":track_length,"distance_class":Data.DISTANCE_IDS[active_distance],"ai_boosts":rivals.reduce(func(total,r): return total+r.boosts_used,0),"health":health,"hits":hits,"takedowns":takedowns,"traffic":traffic.size(),"fps":Engine.get_frames_per_second(),"score":score,"rank":final_rank,"reason":finish_reason,"prize":race_income.gross,"fine":race_fine.gross,"cash":economy.cash,"bike":active_bike.id,"escapes":police.escapes,"jumps":jumps,"bounces":bounces,"best_jump":best_jump,"weapon":loadout.current,"weapons_claimed":weapons_claimed}))
 		request_quit()
 
 func _capture() -> void:

@@ -67,6 +67,20 @@ func build(map_index: int = 0) -> void:
 		environment.sky.sky_material.sky_horizon_color=Color("c7d7aa")
 		environment.fog_light_color=Color("a0b59d")
 	if course.id=="coast": environment.fog_light_color=Color("78a8b6")
+	if course.id=="skyway":
+		environment.sky.sky_material.sky_top_color=Color("397bc1")
+		environment.fog_light_color=Color("b6dce4")
+		environment.fog_density=0.0020
+	if course.id=="volcano":
+		environment.sky.sky_material.sky_top_color=Color("221b32")
+		environment.sky.sky_material.sky_horizon_color=Color("b35235")
+		environment.fog_light_color=Color("6f4246")
+		sun.light_color=Color("ff9f6b")
+	if course.id=="glacier":
+		environment.sky.sky_material.sky_top_color=Color("345b8c")
+		environment.sky.sky_material.sky_horizon_color=Color("c9e6ff")
+		environment.fog_light_color=Color("b8d7ed")
+		sun.light_color=Color("b8d9ff")
 	finish_gate = _gate("FINISH",Color("b9f3ec"))
 	add_child(finish_gate)
 	_build_finish_festival()
@@ -174,7 +188,9 @@ func _chunk(index: int) -> Node3D:
 
 func _make_scenery(n: Node3D, index: int, amber: Material, cyan: Material, concrete: Material) -> void:
 	for side in [-1,1]:
-		if course.id in ["harbor","neon","coast"]:
+		if course.id in ["skyway","volcano","mesa","glacier"]:
+			_expansion_landmark(n,index,side)
+		elif course.id in ["harbor","neon","coast"]:
 			for j in (1 if course.id=="coast" else 2):
 				var height = rng.randf_range(15,80 if course.id=="neon" else 65)
 				var material = ShaderMaterial.new()
@@ -254,7 +270,7 @@ func _gate(text: String, color: Color) -> Node3D:
 	gate.add_child(label)
 	return gate
 
-func update_track(distance: float, finish: float, time: float = 0.0) -> void:
+func update_track(distance: float, finish: float, time: float = 0.0, view_height: float = 0.0) -> void:
 	current_distance = distance
 	var base = int(floor(distance/CHUNK_LENGTH))-6
 	for i in CHUNK_COUNT:
@@ -267,7 +283,7 @@ func update_track(distance: float, finish: float, time: float = 0.0) -> void:
 			_shape_chunk(chunk,d)
 			chunk.set_meta("segment",segment)
 		var sign_gate = chunk.get_node_or_null("SignGate")
-		if sign_gate: sign_gate.visible = absf(d-finish)>85
+		if sign_gate: sign_gate.visible = absf(d-finish)>85 and (view_height<2.5 or absf(d-distance)>70)
 		var bridge = chunk.get_node_or_null("Bridge")
 		if bridge: bridge.visible = d>=finish*0.66 and d<=finish+200
 	finish_gate.position = relative_position(0,finish,distance)
@@ -351,13 +367,13 @@ func white_material() -> Material:
 func height_at(d: float) -> float:
 	# Start and finish are level staging areas; all elevation is deterministic.
 	var ramp=smoothstep(160.0,340.0,d)*(1.0-smoothstep(course.length-400.0,course.length-180.0,d))
-	var amplitude=[0.0,7.0,14.0,2.5,19.0,12.0,8.0,24.0][course_index]
+	var amplitude=float(course.get("amplitude",[0.0,7.0,14.0,2.5,19.0,12.0,8.0,24.0][mini(course_index,7)]))
 	var base=amplitude*(0.65+0.45*sin(d*0.004)+0.2*sin(d*0.009))
 	var hump=0.0
 	if course_index>=4:
-		var period=[0,0,0,0,720,430,620,840][course_index]
-		var width=[0.0,0,0,0,200,180,165,240][course_index]
-		var peak=[0.0,0,0,0,12,9,10,14][course_index]
+		var period=float(course.get("period",[0,0,0,0,720,430,620,840][mini(course_index,7)]))
+		var width=float(course.get("hump_width",[0.0,0,0,0,200,180,165,240][mini(course_index,7)]))
+		var peak=float(course.get("hump_peak",[0.0,0,0,0,12,9,10,14][mini(course_index,7)]))
 		var t=fposmod(d-430.0,float(period))
 		if t<width: hump=peak*0.5*(1-cos(TAU*t/width))
 	return (base+hump)*ramp
@@ -374,8 +390,8 @@ func road_half_width(d: float) -> float:
 	return 9.5-pinch*staging*(3.4 if course.id=="quarry" else 2.3)
 
 func surface_at(d: float) -> String:
-	if course.id=="storm": return "wet"
-	if course.id=="quarry" and d>350 and d<course.length-350 and fposmod(d,1050)<350: return "gravel"
+	if course.id in ["storm","glacier"]: return "wet"
+	if course.id in ["quarry","mesa"] and d>350 and d<course.length-350 and fposmod(d,1050)<350: return "gravel"
 	return "asphalt"
 
 func grip_at(d: float) -> float:
@@ -501,3 +517,29 @@ func traffic_vehicle(spec: Dictionary, color: Color) -> Node3D:
 		Geo.box(n,Vector3(width*0.9,spec.height-1.4,0.04),Vector3(0,(spec.height+1.12)/2,length/2+0.02),dark)
 		for x in [-0.25,0.25]: Geo.box(n,Vector3(0.07,spec.height-1.5,0.05),Vector3(x,(spec.height+1.12)/2,length/2+0.05),steel)
 	return n
+
+func _expansion_landmark(n: Node3D, index: int, side: int) -> void:
+	var landmark=Node3D.new()
+	landmark.name="Landmark_"+course.id+str(side)
+	n.add_child(landmark)
+	landmark.position=Vector3(side*(28+index%4*7),-9,0)
+	if course.id=="skyway":
+		var steel=Geo.mat(Color("c4d6df"),0.55,0.45)
+		Geo.box(landmark,Vector3(4,80,5),Vector3(0,12,0),steel)
+		Geo.box(landmark,Vector3(5,0.4,6),Vector3(0,53,0),Geo.mat(Color("65cffa"),0,0.5,3))
+		Geo.link(landmark,Vector3(0,48,0),Vector3(-side*12,9,18),0.12,steel)
+		Geo.sphere(landmark,14,Vector3(side*12,-22,-5),Geo.mat(Color("c0dbe3"),0,1),Vector3(2,0.4,1))
+	elif course.id=="volcano":
+		var basalt=Geo.mat(Color("302b38"),0.2,0.95)
+		for j in 3:
+			Geo.cylinder(landmark,4.0-j*0.7,25+j*9,Vector3(side*j*11,6+j*4,0),basalt)
+			Geo.link(landmark,Vector3(side*j*11-2,0,0),Vector3(side*j*11+1,22+j*7,1),0.28,Geo.mat(Color("ff692c"),0,1,3))
+		Geo.box(landmark,Vector3(35,0.1,32),Vector3(side*14,-2,0),Geo.mat(Color("b93618"),0,1,1.3))
+	elif course.id=="mesa":
+		var sand=Geo.mat(Color("c28258"),0,1)
+		for x in [-8,8]: Geo.wedge(landmark,Vector3(8,38,15),Vector3(x,14,0),sand)
+		Geo.box(landmark,Vector3(26,6,13),Vector3(0,33,0),Geo.mat(Color("e1ae75"),0,1))
+	else:
+		for j in 4:
+			var ice=Geo.wedge(landmark,Vector3(8,28+j*7,11),Vector3(side*j*9,9+j*3,j*3),Geo.mat(Color("86c8e4") if j%2 else Color("d4edf7"),0.35,0.28))
+			ice.rotation.z=side*0.14

@@ -30,7 +30,7 @@ func fresh(choice: int = 0, level: int = 5, course: int = 0) -> void:
 	game.ride.reset(game.world,600,74)
 func run() -> void:
 	check(Data.race_length(0,0)==5400 and Data.race_length(0,1)==10800 and Data.race_length(0,2)==21600,"harbor short medium long have exact independent distances")
-	check(Data.race_length(5,2)==28800,"longest course is 28.8 km")
+	check(Data.race_length(5,2)==28800,"legacy windfarm long course remains 28.8 km")
 	check(Data.distance_index("bad")==0 and Data.distance_index(-1)==0 and Data.distance_index(99)==2,"invalid and legacy distance options are bounded")
 	check(Data.record_key("harbor",5,0)=="harbor_5" and Data.record_key("harbor",5,1)=="harbor_5_medium" and Data.record_key("harbor",5,2)=="harbor_5_long","short preserves legacy keys while medium and long separate records")
 	check(Director.boost_reason(5,20,30,4000,100,10)=="超车","legend can boost past an AI while ahead of player")

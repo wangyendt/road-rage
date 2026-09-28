@@ -66,3 +66,23 @@ func weapon_claim(from: Vector3, to: Vector3, color: Color) -> void:
 	tween.tween_property(token,"position",(from+to)*0.5+Vector3(0,1.5,0),0.18).set_trans(Tween.TRANS_SINE)
 	tween.tween_property(token,"position",to,0.18).set_trans(Tween.TRANS_SINE)
 	tween.tween_callback(token.queue_free)
+
+func rebound(pos: Vector3, color: Color, power: float) -> void:
+	if DisplayServer.get_name()=="headless": return
+	burst(pos,color,power>0.6)
+	var ring=MeshInstance3D.new()
+	var mesh=TorusMesh.new()
+	mesh.inner_radius=0.82
+	mesh.outer_radius=1.0
+	mesh.rings=32
+	mesh.ring_segments=8
+	ring.mesh=mesh
+	ring.position=pos
+	var material=Geo.mat(color,0,0.6,2.0)
+	material.transparency=BaseMaterial3D.TRANSPARENCY_ALPHA
+	ring.material_override=material
+	add_child(ring)
+	var tween=ring.create_tween().set_parallel(true)
+	tween.tween_property(ring,"scale",Vector3(6+power*5,0.2,6+power*5),0.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tween.tween_property(material,"albedo_color:a",0.0,0.5)
+	tween.chain().tween_callback(ring.queue_free)

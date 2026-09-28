@@ -9,7 +9,12 @@ const COURSES = [
 	{"id":"coast","name":"海崖天际线","en":"COASTLINE FLIGHT","length":6800.0,"subtitle":"海崖起伏 / 跨谷飞跃","description":"掠过海岸与石拱。高速越过坡顶会离地，落地前留好走线。","color":Color("64dcca"),"curve":[65.0,0.0018,18.0,0.006],"traffic":0.85,"theme":0},
 	{"id":"windfarm","name":"风车丘陵","en":"TURBINE HILLS","length":7200.0,"subtitle":"连绵丘陵 / 巨型风机","description":"连续波浪坡与风机群。长行程悬挂更适合反复腾空。","color":Color("d0e597"),"curve":[75.0,0.0014,20.0,0.0045],"traffic":0.8,"theme":2},
 	{"id":"quarry","name":"矿场运输线","en":"QUARRY EXPRESS","length":5800.0,"subtitle":"施工收窄 / 碎石坡道","description":"重卡、锥桶与碎石路交替出现；提前减速通过窄口。","color":Color("ffbf67"),"curve":[65.0,0.0021,28.0,0.005],"traffic":1.12,"theme":1},
-	{"id":"storm","name":"雨雾山脊","en":"STORM RIDGE","length":6600.0,"subtitle":"湿滑山路 / 急弯长坡","description":"冷雨中的高差山路，抓地力降低。坡顶加速前先看前方。","color":Color("90bced"),"curve":[88.0,0.0018,30.0,0.006],"traffic":0.75,"theme":3}
+	{"id":"storm","name":"雨雾山脊","en":"STORM RIDGE","length":6600.0,"subtitle":"湿滑山路 / 急弯长坡","description":"冷雨中的高差山路，抓地力降低。坡顶加速前先看前方。","color":Color("90bced"),"curve":[88.0,0.0018,30.0,0.006],"traffic":0.75,"theme":3},
+	{"id":"skyway","name":"云端天路","en":"SKYWAY ASCENT","length":8600.0,"subtitle":"云海高架 / 陡坡连飞","description":"穿越高塔与云海，陡坡抛离路面，再用弹性悬挂接住落地。","color":Color("8fe5ff"),"curve":[62.0,0.0015,20.0,0.004],"traffic":0.65,"theme":0,"amplitude":42.0,"period":1150.0,"hump_width":200.0,"hump_peak":34.0},
+	{"id":"volcano","name":"熔火脊线","en":"MAGMA RIDGE","length":8200.0,"subtitle":"玄武岩 / 熔光深谷","description":"黑色岩壁与熔光裂隙，高坡落差大，长弹簧摩托更有发挥。","color":Color("ff925c"),"curve":[68.0,0.0016,24.0,0.0045],"traffic":0.70,"theme":1,"amplitude":48.0,"period":1350.0,"hump_width":210.0,"hump_peak":39.0},
+	{"id":"mesa","name":"荒原巨浪","en":"MESA SURGE","length":9000.0,"subtitle":"巨型台地 / 碎石连坡","description":"巨岩拱门、连续大坡和碎石路段。控制落点，接出连续反弹。","color":Color("efc47a"),"curve":[85.0,0.0012,20.0,0.0038],"traffic":0.86,"theme":1,"amplitude":36.0,"period":980.0,"hump_width":180.0,"hump_peak":32.0},
+	{"id":"glacier","name":"冰川飞脊","en":"GLACIER LEAP","length":9400.0,"subtitle":"冰晶峡谷 / 冷色高差","description":"冰峰间的高架起伏路，湿滑弯道配合长坡，适合空中控向。","color":Color("b3d3ff"),"curve":[72.0,0.0014,27.0,0.0042],"traffic":0.60,"theme":2,"amplitude":52.0,"period":1450.0,"hump_width":220.0,"hump_peak":40.0}
+
 
 ]
 const LEVEL_NAMES = ["新手巡游","轻松竞速","街头高手","职业对抗","传奇极限"]

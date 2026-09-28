@@ -103,6 +103,33 @@ func build(color: Color, player: bool = false, shape: int = 0) -> void:
 			Geo.wedge(chassis,Vector3(0.62,0.08,0.53),Vector3(side*0.6,1.2,-0.65),dark)
 			Geo.box(chassis,Vector3(0.035,0.06,1.7),Vector3(side*0.44,1.15,-0.25),light)
 		Geo.box(chassis,Vector3(1.35,0.08,0.32),Vector3(0,1.7,0.95),shell)
+	elif shape>=8:
+		var detail=Node3D.new()
+		detail.name="SuspensionKit%d"%shape
+		chassis.add_child(detail)
+		for side in [-1,1]:
+			var x=side*0.40
+			Geo.link(detail,Vector3(x,0.5,0.75),Vector3(x,1.3,0.35),0.09,steel)
+			for coil in 7:
+				var t=coil/7.0
+				var ring=Geo.cylinder(detail,0.14,0.045,Vector3(x,0.55+t*0.65,0.73-t*0.32),shell)
+				ring.rotation.x=-0.43
+		if shape==8:
+			Geo.wedge(detail,Vector3(0.58,0.2,1.7),Vector3(0,1.45,-0.05),shell)
+			Geo.box(detail,Vector3(0.14,0.55,0.08),Vector3(0,1.75,-0.70),light)
+		elif shape==9:
+			for side in [-1,1]:
+				Geo.box(detail,Vector3(0.30,0.75,1.4),Vector3(side*0.53,0.95,0.10),shell)
+				Geo.link(detail,Vector3(side*0.75,0.6,-0.75),Vector3(side*0.75,1.4,-0.3),0.13,steel)
+		elif shape==10:
+			for side in [-1,1]:
+				Geo.wedge(detail,Vector3(0.95,0.10,0.7),Vector3(side*0.77,1.22,-0.55),shell)
+				Geo.box(detail,Vector3(0.08,0.36,0.62),Vector3(side*0.43,1.60,0.92),light)
+		else:
+			Geo.box(detail,Vector3(0.64,0.70,0.07),Vector3(0,1.83,-0.80),Geo.mat(Color("72949d"),0.45,0.25))
+			for side in [-1,1]:
+				Geo.link(detail,Vector3(side*0.58,0.68,-0.8),Vector3(side*0.58,1.3,0.7),0.08,steel)
+				Geo.box(detail,Vector3(0.32,0.35,0.6),Vector3(side*0.5,1.1,0.78),dark)
 	# Rider: articulated jacket, boots, helmet, and swinging baton.
 	rider = Node3D.new()
 	chassis.add_child(rider)

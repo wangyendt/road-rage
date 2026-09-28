@@ -12,6 +12,7 @@ func run() -> void:
 		check(game.world.course_index==index,"new course %d loads real terrain"%index)
 	await capture("v4-maps")
 	await click("courses_next")
+	await click("courses_next")
 	check(game.course_page==0,"map pagination wraps to classic maps")
 	await click("back")
 	await click("garage")

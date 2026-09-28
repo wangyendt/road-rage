@@ -5,11 +5,11 @@ const Data = preload("res://scripts/game_data.gd")
 const Motion = preload("res://scripts/result_motion.gd")
 const Progress = preload("res://scripts/race_progress.gd")
 const Controls = preload("res://scripts/controls.gd")
-const INK = Color("101c2d")
-const WHITE = Color("e9f3f3")
-const MUTED = Color("a0b5c2")
-const ORANGE = Color("ff8257")
-const CYAN = Color("8be7ec")
+const INK = Color("081321")
+const WHITE = Color("f0f4fa")
+const MUTED = Color("a1b6ce")
+const ORANGE = Color("ff9452")
+const CYAN = Color("7be3ff")
 var game: Node
 var title_font: SystemFont
 var body_font: Font
@@ -21,6 +21,8 @@ var ui_offset = Vector2.ZERO
 var mouse = Vector2(-100,-100)
 var mouse_active = false
 var content_alpha = 1.0
+var ui_clock = 0.0
+var focus_glow: Dictionary = {}
 
 func _ready() -> void:
 	title_font = SystemFont.new()
@@ -36,6 +38,14 @@ func _ready() -> void:
 	number_font.font_weight = 700
 	number_font.fallbacks=[body_font]
 	mouse_filter = Control.MOUSE_FILTER_STOP
+
+func _process(dt: float) -> void:
+	if not game: return
+	if game.settings.shake: ui_clock+=minf(dt,0.05)
+	for i in buttons.size():
+		var action=buttons[i].action
+		focus_glow[action]=move_toward(float(focus_glow.get(action,0)),1.0 if i==selected else 0.0,dt*9)
+	queue_redraw()
 
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
@@ -95,48 +105,79 @@ func _center(value: String, center: Vector2, size: int, color: Color = WHITE, fo
 	var width = f.get_string_size(value,HORIZONTAL_ALIGNMENT_LEFT,-1,size).x
 	_text(value,center-Vector2(width/2,0),size,color,f)
 
+func _cut_shape(rect: Rect2, cut: float = 10.0) -> PackedVector2Array:
+	var p=rect.position
+	var e=rect.end
+	var c=minf(cut,minf(rect.size.x,rect.size.y)*0.24)
+	return PackedVector2Array([p+Vector2(c,0),Vector2(e.x, p.y),Vector2(e.x,e.y-c),e-Vector2(c,0),Vector2(p.x,e.y),p+Vector2(0,c)])
+
 func _panel(rect: Rect2, color: Color, radius: int = 10, border: Color = Color.TRANSPARENT) -> void:
-	var sb = StyleBoxFlat.new()
 	color.a*=content_alpha
 	border.a*=content_alpha
-	sb.bg_color = color
-	sb.set_corner_radius_all(radius)
-	if border.a>0:
-		sb.set_border_width_all(1)
-		sb.border_color = border
-	draw_style_box(sb,rect)
+	var shape=_cut_shape(rect,float(radius)+3)
+	draw_colored_polygon(shape,color)
+	var line=shape.duplicate()
+	line.append(shape[0])
+	draw_polyline(line,border if border.a>0 else Color(0.45,0.66,0.82,0.16*content_alpha),1,true)
+	if rect.size.x>100 and rect.size.y>45:
+		var edge=border if border.a>0 else CYAN
+		edge.a=0.55*content_alpha
+		draw_line(rect.position+Vector2(13,1),rect.position+Vector2(minf(rect.size.x*0.35,90),1),edge,2,true)
 
 func _button(action: String, label: String, rect: Rect2, primary: bool = false, hint: String = "") -> void:
-	var index = buttons.size()
-	var focus = index == selected
-	var bg = Color(0.07,0.13,0.21,0.86)
-	if primary: bg = ORANGE
-	elif focus: bg = Color("2c4856")
-	var fg = INK if primary else WHITE
-	_panel(rect,bg,5,WHITE if focus else Color(0.6,0.8,0.9,0.16))
-	if focus: draw_rect(Rect2(rect.position+Vector2(0,8),Vector2(3,rect.size.y-16)),INK if primary else CYAN)
-	_text(label,rect.position+Vector2(23,rect.size.y*0.5+8),22,fg)
-	if not hint.is_empty():
-		var width = body_font.get_string_size(hint,HORIZONTAL_ALIGNMENT_LEFT,-1,15).x
-		_text(hint,rect.position+Vector2(rect.size.x-width-20,rect.size.y*.5+5),15,fg if primary else MUTED)
+	var index=buttons.size()
+	var focus=index==selected
+	var glow=float(focus_glow.get(action,1.0 if focus else 0.0)) if game.settings.shake else (1.0 if focus else 0.0)
+	var accent=ORANGE if primary else CYAN
+	var bg=Color("13283d").lerp(Color("284b68"),glow)
+	if primary: bg=ORANGE.lerp(Color("ffcf91"),glow*0.38)
+	var fg=INK if primary else WHITE
+	_panel(Rect2(rect.position+Vector2(0,4),rect.size),Color(0.0,0.02,0.05,0.5),9)
+	_panel(rect,bg,9,accent if primary or focus else Color("3b5872"))
+	# A racing-stripe end cap; label and hit target never shift during hover.
+	if rect.size.x>110:
+		for i in 3:
+			var end=rect.end-Vector2(10+i*5,6)
+			draw_line(end-Vector2(0,9),end-Vector2(4,0),Color(fg,0.28),1.4,true)
+	if focus:
+		draw_line(rect.position+Vector2(10,rect.size.y-2),rect.position+Vector2(rect.size.x-13,rect.size.y-2),accent if not primary else INK,2,true)
+	var hint_width=body_font.get_string_size(hint,HORIZONTAL_ALIGNMENT_LEFT,-1,14).x if not hint.is_empty() else 0.0
+	var size=22
+	var available=rect.size.x-40-(hint_width+18 if hint_width>0 else 0)
+	while size>15 and body_font.get_string_size(label,HORIZONTAL_ALIGNMENT_LEFT,-1,size).x>available: size-=1
+	if rect.size.x<100: _center(label,rect.get_center()+Vector2(0,8),24,fg)
+	else: _text(label,rect.position+Vector2(20,rect.size.y*0.5+8),size,fg)
+	if not hint.is_empty(): _text(hint,rect.position+Vector2(rect.size.x-hint_width-23,rect.size.y*.5+5),14,fg if primary else MUTED)
 	buttons.append({"action":action,"rect":rect})
 
 func _shade(alpha: float = 0.75) -> void:
-	draw_rect(Rect2(-ui_offset/ui_scale,get_viewport_rect().size/ui_scale),Color(0.025,0.055,0.1,alpha))
+	draw_rect(Rect2(-ui_offset/ui_scale,get_viewport_rect().size/ui_scale),Color(0.015,0.035,0.075,alpha))
+	if game.state not in ["race","countdown","paused","finished"]:
+		for i in 9:
+			var x=fposmod(i*210+ui_clock*18,1900)-200
+			draw_line(Vector2(x,0),Vector2(x-370,900),Color(0.33,0.6,0.82,0.035),2,true)
+		for i in 5:
+			var x=1130+i*42
+			draw_colored_polygon(PackedVector2Array([Vector2(x,18),Vector2(x+24,18),Vector2(x-2,52),Vector2(x-26,52)]),Color(1,0.56,0.29,0.18))
+		draw_line(Vector2(34,56),Vector2(34,842),Color(CYAN,0.20),1,true)
+		draw_line(Vector2(34,842),Vector2(52,866),ORANGE,2,true)
 
 func _menu() -> void:
 	# A left-weighted cinematic scrim keeps the procedural hero bike visible.
+	_shade(0.20)
 	draw_rect(Rect2(-ui_offset.x/ui_scale,-ui_offset.y/ui_scale,560+ui_offset.x/ui_scale,900+ui_offset.y*2/ui_scale),Color(0.025,0.055,0.1,0.82))
 	for i in 32:
 		draw_rect(Rect2(560+i*15,0,15,900),Color(0.025,0.055,0.1,0.82*(1-float(i)/32)))
 	_panel(Rect2(64,48,38,34),ORANGE,3)
 	_text("R",Vector2(75,74),27,INK,title_font)
-	_text("ROAD RAGE  /  ORIGINAL ARCADE",Vector2(117,72),16,MUTED,number_font)
-	_text("FULL THROTTLE. NO APOLOGIES.",Vector2(68,153),17,CYAN,number_font)
+	_text("ROAD RAGE  /  FLIGHT DIVISION",Vector2(117,72),16,MUTED,number_font)
+	_text("BOOST. LAUNCH. REBOUND.",Vector2(68,153),17,CYAN,number_font)
 	_text("ROAD",Vector2(59,288),156,WHITE,title_font)
+	_text("RAGE",Vector2(62,423),174,Color(0.38,0.13,0.08,0.8),title_font)
 	_text("RAGE",Vector2(59,420),174,ORANGE,title_font)
+	for i in 4: draw_line(Vector2(438+i*20,301),Vector2(398+i*20,413),Color(ORANGE,0.25),6,true)
 	_text("极 限 狂 飙",Vector2(68,467),29,WHITE)
-	_text("抢占赛道。放倒对手。第一个冲线。",Vector2(68,510),18,MUTED)
+	_text("冲上云端，触底反弹，再抢下第一。",Vector2(68,510),18,MUTED)
 	_button("start","开始狂飙",Rect2(68,550,362,64),true,"ENTER  →")
 	_button("roster","车手档案",Rect2(68,630,362,52),false,"15 RIDERS")
 	_button("settings","游戏设置",Rect2(68,695,173,52))
@@ -148,7 +189,7 @@ func _menu() -> void:
 	_text("%s · %.1f KM"%[Data.COURSES[game.race_options.course].name,Data.race_length(game.race_options.course,game.race_options.get("distance",0))/1000],Vector2(1040,112),17,MUTED)
 	draw_line(Vector2(1100,131),Vector2(1369,131),Color(0.7,0.85,0.9,0.3),1,true)
 	_text("UP TO 16 RIDERS",Vector2(1040,159),17,CYAN,number_font)
-	_text("1 FINISH LINE",Vector2(1234,159),17,WHITE,number_font)
+	_text("12 COURSES",Vector2(1234,159),17,WHITE,number_font)
 	_panel(Rect2(1102,757,266,85),Color(0.04,0.1,0.17,0.7),5)
 	_text("你的座驾",Vector2(1121,784),14,MUTED)
 	_text(game.economy.bike().name,Vector2(1121,819),22,WHITE,title_font)
@@ -227,12 +268,13 @@ func _race(interactive: bool = true) -> void:
 	_standings_board(interactive)
 	if game.settings.map: _minimap()
 	if game.settings.mirror: _rear_view()
-	if game.message_time>0 and game.state=="race":
+	if game.message_time>0 and game.state=="race" and game.rebound_timer<=0:
 		var a = minf(game.message_time*3,1)
 		var color = game.message_color
 		color.a = a
 		_center(game.message,Vector2(720,288),32,color)
 		_center(game.message_sub,Vector2(720,321),15,Color(0.9,0.96,0.96,a))
+	if game.rebound_timer>0 and game.state in ["race","paused"]: _rebound_pop()
 	if game.elapsed<7 and game.state=="race" and game.message_time<=0:
 		_center("自动油门 · 靠近对手后，按 %s / %s 出击"%[game.controls.label("attack_left"),game.controls.label("attack_right")],Vector2(720,320),19,WHITE)
 	if game.police.pursuit_active and game.state in ["race","paused"]:
@@ -249,7 +291,7 @@ func _race(interactive: bool = true) -> void:
 		_center("自动恢复中 · 对手仍在前进",Vector2(720,720),15,MUTED)
 		draw_rect(Rect2(496,736,448,5),Color("304958"))
 		draw_rect(Rect2(496,736,448*(1-game.player.recovery_time/game.player.recovery_duration),5),ORANGE)
-	elif game.catchup_help>2:
+	elif game.catchup_help>2 and not game.ride.airborne:
 		_center("追赶辅助生效 · 引擎响应与氮气恢复提升",Vector2(720,756),14,CYAN)
 	if game.state=="countdown":
 		var n = ceili(game.countdown)
@@ -301,7 +343,7 @@ func _settings() -> void:
 	_shade(0.87)
 	_text("TUNE YOUR RIDE",Vector2(292,116),53,WHITE,title_font)
 	_text("游戏设置",Vector2(292,158),23,CYAN)
-	var rows = [["volume","主音量","%d%%"%roundi(game.settings.volume*100)],["music","电子配乐","开启" if game.settings.music else "关闭"],["shake","镜头震动","开启" if game.settings.shake else "关闭"],["quality","渲染质量","精致 · 120 FPS 上限" if game.settings.quality else "流畅 · 60 FPS 上限"],["map","赛道小地图","显示" if game.settings.map else "隐藏"],["mirror","实时后视镜","显示" if game.settings.mirror else "隐藏"],["bindings","修改快捷键","KEY BINDINGS  →"]]
+	var rows = [["volume","主音量","%d%%"%roundi(game.settings.volume*100)],["music","电子配乐","开启" if game.settings.music else "关闭"],["shake","震动 / 界面动效","开启" if game.settings.shake else "关闭"],["quality","渲染质量","精致 · 120 FPS 上限" if game.settings.quality else "流畅 · 60 FPS 上限"],["map","赛道小地图","显示" if game.settings.map else "隐藏"],["mirror","实时后视镜","显示" if game.settings.mirror else "隐藏"],["bindings","修改快捷键","KEY BINDINGS  →"]]
 	for i in rows.size(): _button(rows[i][0],rows[i][1],Rect2(292,201+i*68,856,53),false,rows[i][2])
 	_text("AI 数量、场景和五档难度在赛前设置；快捷键会自动保存。",Vector2(292,727),16,MUTED)
 	_button("back","返回",Rect2(292,766,250,55),true,"ESC")
@@ -354,7 +396,7 @@ func _results() -> void:
 	_text("钱包 $%d   ·   待缴罚款 $%d   ·   奖金用于购买新摩托"%[game.economy.cash,game.economy.debt],Vector2(173,652),18,MUTED)
 	_text("脱逃  %02d"%game.police.escapes,Vector2(1027,448),19,CYAN)
 	_text("夺取武器 %02d"%game.weapons_claimed,Vector2(969,390),16,CYAN)
-	_text("飞跃 %02d  /  最远 %.0fm"%[game.jumps,game.best_jump],Vector2(969,353),16,CYAN)
+	_text("飞跃 %02d / %.0fm / 反弹 %02d"%[game.jumps,game.best_jump,game.bounces],Vector2(969,353),16,CYAN)
 	# Controls keep stable hitboxes throughout the entrance animation.
 	content_alpha=1
 	draw_set_transform(ui_offset,0,Vector2.ONE*ui_scale)
@@ -643,11 +685,19 @@ func _garage() -> void:
 		if i in [4,6]: draw_line(Vector2(x+95,315),Vector2(x+112,291),CYAN,6,true)
 		if i==5: draw_rect(Rect2(x+127,323,74,27),bike.color.darkened(0.4))
 		if i==6: draw_rect(Rect2(x+199,330,55,40),bike.color.darkened(0.3))
+		if i>=8:
+			for coil in 5: draw_line(Vector2(x+187+coil*2,346-coil*6),Vector2(x+202+coil*2,346-coil*6),CYAN,2,true)
+		if i==9: draw_rect(Rect2(x+129,328,77,27),bike.color.darkened(0.3))
+		if i==10: draw_colored_polygon(PackedVector2Array([Vector2(x+148,314),Vector2(x+210,281),Vector2(x+201,326)]),CYAN)
+		if i==11: draw_line(Vector2(x+96,311),Vector2(x+102,291),WHITE,5,true)
 		if i in [3,7]: draw_line(Vector2(x+218,300),Vector2(x+270,300),bike.color,7,true)
 		_text("极速 / 氮气  %d / %d km/h"%[bike.speed*3.6,bike.boost*3.6],Vector2(x+18,426),16,WHITE)
 		_text("加速 %d   操控 %.1f"%[bike.accel,bike.handling],Vector2(x+18,459),17,MUTED)
-		_text("受伤倍率  %.0f%%"%(bike.armor*100),Vector2(x+18,491),17,MUTED)
-		_paragraph(bike.desc,Vector2(x+18,526),268,17,MUTED)
+		_text("受伤 %.0f%%  /  缓冲 %.0f"%[bike.armor*100,bike.get("suspension",22.0)],Vector2(x+18,488),16,MUTED)
+		_text("反弹系数 %.2f  /  空控 %.0f%%"%[bike.restitution,bike.air_control*100],Vector2(x+18,518),16,CYAN)
+		draw_rect(Rect2(x+18,531,268,4),Color("2a4056"))
+		draw_rect(Rect2(x+18,531,268*bike.restitution/0.8,4),bike.color)
+		_paragraph(bike.desc,Vector2(x+18,557),268,15,MUTED)
 		var owned=bike.id in game.economy.owned
 		_button("bike:"+bike.id,"驾驶中" if selected_bike else ("换上这台" if owned else "购买 $%d"%bike.price),Rect2(x+17,620,272,53),selected_bike)
 	_button("bikes_prev","← 上一页",Rect2(846,817,156,55))
@@ -722,3 +772,22 @@ func _weapon_icon(id: String, pos: Vector2, color: Color) -> void:
 		else:
 			draw_line(pos+Vector2(-1,-18),pos+Vector2(18,-6),color,3,true)
 			draw_colored_polygon(PackedVector2Array([pos+Vector2(5,-17),pos+Vector2(19,-31),pos+Vector2(15,-11)]),color)
+
+func _rebound_pop() -> void:
+	var t=clampf(1.0-game.rebound_timer/1.15,0,1)
+	var alpha=pow(1-t,1.3)
+	var scale=lerpf(0.82,1.48,1-pow(1-t,3)) if game.settings.shake else 1.0
+	var center=Vector2(720,350)
+	var radius=90+t*200 if game.settings.shake else 115
+	for ring in 2:
+		draw_arc(center,radius+ring*20,-PI*0.92,-PI*0.08,48,Color(ORANGE,alpha*(0.65-ring*0.2)),3-ring,true)
+	if game.settings.shake:
+		for ray in 12:
+			var direction=Vector2.RIGHT.rotated(ray*TAU/12)
+			draw_line(center+direction*(radius+10),center+direction*(radius+28+game.rebound_power*25),Color(CYAN,alpha*0.55),2,true)
+	# Deliberately a playful chart-shaped impact badge, not financial advice.
+	var chart=PackedVector2Array([center+Vector2(-160,45),center+Vector2(-125,64),center+Vector2(-93,47),center+Vector2(-64,55),center+Vector2(-24,22)])
+	draw_polyline(chart,Color(CYAN,alpha),3,true)
+	_center("触底反弹",center+Vector2(2,2),int(48*scale),Color(0.02,0.05,0.09,alpha))
+	_center("触底反弹",center,int(48*scale),Color("ffcf91")*Color(1,1,1,alpha))
+	_center("REBOUND  ×%d  /  蓄势上扬"%game.rebound_chain,center+Vector2(55,54),17,Color(CYAN,alpha),number_font)

@@ -1,14 +1,19 @@
 extends RefCounted
 ## Local career ledger. Points and spendable money are intentionally separate.
 const BIKES = [
-	{"id":"rr09","name":"RR-09 街头先锋","tag":"STREET / BALANCED","price":0,"speed":74.0,"boost":99.0,"accel":17.0,"handling":10.5,"armor":1.0,"color":Color("f26942"),"shape":0,"desc":"免费起始座驾。速度与操控均衡，适合学习贴身战斗。"},
-	{"id":"lynx","name":"LYNX 轻骑","tag":"AGILITY / CONTROL","price":2400,"speed":77.0,"boost":103.0,"accel":21.0,"handling":12.4,"armor":1.06,"color":Color("52dbc0"),"shape":1,"desc":"轻量车架，转向灵活、加速更快；装甲略薄。"},
-	{"id":"titan","name":"TITAN 铁卫","tag":"ARMOR / COMBAT","price":5600,"speed":79.0,"boost":105.0,"accel":16.0,"handling":9.8,"armor":0.73,"color":Color("eab14d"),"shape":2,"desc":"厚重侧甲和护杠，承受伤害降低 27%；走位要提前。"},
-	{"id":"spectre","name":"SPECTRE 幻影","tag":"SPEED / PRECISION","price":9800,"speed":85.0,"boost":114.0,"accel":23.0,"handling":11.3,"armor":1.12,"color":Color("ad89ff"),"shape":3,"desc":"空气动力尾翼与竞速整流罩，高速竞赛；失误代价也更大。"},
-	{"id":"nomad","name":"NOMAD 越野行者","tag":"RALLY / SUSPENSION","price":4200,"speed":76.0,"boost":102.0,"accel":19.0,"handling":11.6,"armor":0.93,"suspension":27.0,"grip":1.2,"color":Color("d9e898"),"shape":4,"desc":"拉力风挡与高位护泥板。长行程悬挂吸收落地冲击，碎石路更稳。"},
-	{"id":"comet","name":"COMET 电光","tag":"ELECTRIC / ACCEL","price":7200,"speed":81.0,"boost":110.0,"accel":29.0,"handling":12.8,"armor":1.14,"suspension":19.0,"grip":1.05,"color":Color("79c8ff"),"shape":5,"desc":"封闭电池车身，瞬间加速擅长出弯；重落地需要谨慎。"},
-	{"id":"mammoth","name":"MAMMOTH 远征","tag":"TOURING / ENDURANCE","price":8400,"speed":80.0,"boost":107.0,"accel":18.0,"handling":10.1,"armor":0.68,"suspension":25.0,"grip":1.12,"color":Color("de9b6f"),"shape":6,"desc":"双侧边箱与高风挡。耐撞、落地稳，代价是转向较慢。"},
-	{"id":"falcon","name":"FALCON 隼影","tag":"HYPER / AERO","price":14500,"speed":91.0,"boost":122.0,"accel":25.0,"handling":11.8,"armor":1.2,"suspension":21.0,"grip":1.08,"color":Color("f278b1"),"shape":7,"desc":"低风阻整流罩与双翼。最高极速更易冲坡起飞，适合高手。"}
+	{"id":"rr09","name":"RR-09 街头先锋","tag":"STREET / BALANCED","price":0,"speed":74.0,"boost":99.0,"accel":17.0,"handling":10.5,"armor":1.0,"color":Color("f26942"),"restitution":0.24,"air_control":0.35,"shape":0,"desc":"免费起始座驾。速度与操控均衡，适合学习贴身战斗。"},
+	{"id":"lynx","name":"LYNX 轻骑","tag":"AGILITY / CONTROL","price":2400,"speed":77.0,"boost":103.0,"accel":21.0,"handling":12.4,"armor":1.06,"color":Color("52dbc0"),"restitution":0.28,"air_control":0.35,"shape":1,"desc":"轻量车架，转向灵活、加速更快；装甲略薄。"},
+	{"id":"titan","name":"TITAN 铁卫","tag":"ARMOR / COMBAT","price":5600,"speed":79.0,"boost":105.0,"accel":16.0,"handling":9.8,"armor":0.73,"color":Color("eab14d"),"restitution":0.18,"air_control":0.35,"shape":2,"desc":"厚重侧甲和护杠，承受伤害降低 27%；走位要提前。"},
+	{"id":"spectre","name":"SPECTRE 幻影","tag":"SPEED / PRECISION","price":9800,"speed":85.0,"boost":114.0,"accel":23.0,"handling":11.3,"armor":1.12,"color":Color("ad89ff"),"restitution":0.22,"air_control":0.35,"shape":3,"desc":"空气动力尾翼与竞速整流罩，高速竞赛；失误代价也更大。"},
+	{"id":"nomad","name":"NOMAD 越野行者","tag":"RALLY / SUSPENSION","price":4200,"speed":76.0,"boost":102.0,"accel":19.0,"handling":11.6,"armor":0.93,"suspension":27.0,"grip":1.2,"color":Color("d9e898"),"restitution":0.34,"air_control":0.35,"shape":4,"desc":"拉力风挡与高位护泥板。长行程悬挂吸收落地冲击，碎石路更稳。"},
+	{"id":"comet","name":"COMET 电光","tag":"ELECTRIC / ACCEL","price":7200,"speed":81.0,"boost":110.0,"accel":29.0,"handling":12.8,"armor":1.14,"suspension":19.0,"grip":1.05,"color":Color("79c8ff"),"restitution":0.26,"air_control":0.35,"shape":5,"desc":"封闭电池车身，瞬间加速擅长出弯；重落地需要谨慎。"},
+	{"id":"mammoth","name":"MAMMOTH 远征","tag":"TOURING / ENDURANCE","price":8400,"speed":80.0,"boost":107.0,"accel":18.0,"handling":10.1,"armor":0.68,"suspension":25.0,"grip":1.12,"color":Color("de9b6f"),"restitution":0.20,"air_control":0.35,"shape":6,"desc":"双侧边箱与高风挡。耐撞、落地稳，代价是转向较慢。"},
+	{"id":"falcon","name":"FALCON 隼影","tag":"HYPER / AERO","price":14500,"speed":91.0,"boost":122.0,"accel":25.0,"handling":11.8,"armor":1.2,"suspension":21.0,"grip":1.08,"color":Color("f278b1"),"restitution":0.30,"air_control":0.35,"shape":7,"desc":"低风阻整流罩与双翼。最高极速更易冲坡起飞，适合高手。"},
+	{"id":"spring","name":"SPRING 弹簧侠","tag":"REBOUND / STUNT","price":6800,"speed":79.0,"boost":108.0,"accel":22.0,"handling":11.5,"armor":0.95,"suspension":36.0,"grip":1.10,"restitution":0.68,"air_control":0.55,"color":Color("ffba58"),"shape":8,"desc":"外露长弹簧。落地连弹更高，需提前留出空中走线。"},
+	{"id":"anvil","name":"ANVIL 镇山","tag":"DAMPING / ARMOR","price":11200,"speed":83.0,"boost":112.0,"accel":19.0,"handling":10.2,"armor":0.64,"suspension":43.0,"grip":1.22,"restitution":0.16,"air_control":0.30,"color":Color("a3b9d2"),"shape":9,"desc":"液压吸震与厚重护板。落地更稳，反弹低，适合陡坡。"},
+	{"id":"kestrel","name":"KESTREL 空隼","tag":"AERO / AIR CONTROL","price":16800,"speed":89.0,"boost":120.0,"accel":26.0,"handling":12.3,"armor":1.08,"suspension":37.0,"grip":1.04,"restitution":0.52,"air_control":0.78,"color":Color("66dced"),"shape":10,"desc":"侧翼与分体尾架。空中转向灵活，中等弹性兼顾飞跃。"},
+	{"id":"rover","name":"ROVER 巡界者","tag":"RALLY / ENDURANCE","price":12600,"speed":85.0,"boost":114.0,"accel":23.0,"handling":11.7,"armor":0.80,"suspension":40.0,"grip":1.30,"restitution":0.38,"air_control":0.48,"color":Color("b3df9b"),"shape":11,"desc":"双后避震和防滚架。碎石抓地更强，长距离起伏稳定。"}
+
 
 ]
 var cash = 1000
