@@ -76,6 +76,7 @@ var flash = 0.0
 var damage_flash = 0.0
 var traffic_timer = 0.0
 var pickup_timer = 0.0
+var boost_visual = 0.0
 var message = ""
 var message_sub = ""
 var message_time = 0.0
@@ -282,7 +283,9 @@ func _process(raw_dt: float) -> void:
 		flash = move_toward(flash,0,dt*8)
 		damage_flash = move_toward(damage_flash,0,dt*2.5)
 		message_time = maxf(0,message_time-dt)
-	post.set_shader_parameter("boost",1.0 if boost_active and racing else 0.0)
+	boost_visual=move_toward(boost_visual,1.0 if boost_active and state=="race" and settings.shake else 0.0,dt*5)
+	if state!="race" or not settings.shake: boost_visual=0.0
+	post.set_shader_parameter("boost",boost_visual)
 	post.set_shader_parameter("hit",flash)
 	post.set_shader_parameter("damage",damage_flash)
 	_update_mirror()
@@ -344,6 +347,7 @@ func start_race() -> void:
 	player.attack_time = 0
 	traffic_timer = 1.2
 	pickup_timer = 1
+	boost_visual=0
 	message_time = 0
 	finish_reason = ""
 	last_damage_cause = ""

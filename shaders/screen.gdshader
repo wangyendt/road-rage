@@ -7,12 +7,24 @@ void fragment() {
 	vec2 uv = SCREEN_UV;
 	vec2 p = uv - vec2(0.5);
 	float edge = smoothstep(0.20,0.72,length(p));
-	vec2 shift = p * boost * edge * 0.004;
+	// Protect the middle 52% of the frame, including the landing road.
+	float side = smoothstep(0.26,0.49,abs(p.x));
+	vec2 direction = uv - vec2(0.5,0.43);
+	vec2 shift = p * boost * side * 0.004;
 	vec3 col = texture(screen_texture,uv).rgb;
-	col.r = texture(screen_texture,uv+shift).r;
-	col.b = texture(screen_texture,uv-shift).b;
+	if (boost > 0.001 && side > 0.001) {
+		// Directional multi-tap screen-space blur, not temporal/velocity motion blur.
+		vec3 smear = col;
+		for (int i=1; i<=8; i++) {
+			vec2 sample_uv = clamp(uv-direction*float(i)*0.004*boost*side,vec2(0.001),vec2(0.999));
+			smear += texture(screen_texture,sample_uv).rgb;
+		}
+		col = mix(col,smear/9.0,0.85*side*boost);
+		col.r += (texture(screen_texture,uv+shift).r-texture(screen_texture,uv).r)*0.2;
+		col.b += (texture(screen_texture,uv-shift).b-texture(screen_texture,uv).b)*0.2;
+	}
 	col *= 1.0 - edge*0.25;
-	col += vec3(0.0,0.11,0.15)*boost*edge;
+	col += vec3(0.0,0.11,0.15)*boost*side;
 	col = mix(col,vec3(0.85,0.07,0.04),edge*damage*0.6);
 	col += vec3(0.10,0.07,0.035)*hit;
 	COLOR = vec4(col,1.0);

@@ -11,6 +11,10 @@ const WHITE = Color("f0f4fa")
 const MUTED = Color("a1b6ce")
 const ORANGE = Color("ff9452")
 const CYAN = Color("7be3ff")
+# Side-rail cockpit: keep x=390..1090 clear for racing / landing decisions.
+const FLIGHT_RECT = Rect2(1100,250,307,72)
+const PURSUIT_RECT = Rect2(1100,550,307,96)
+const MAP_RECT = Rect2(1175,332,232,205)
 var game: Node
 var title_font: SystemFont
 var body_font: Font
@@ -204,13 +208,17 @@ func _race(interactive: bool = true) -> void:
 		for i in 44:
 			var rain=Vector2(fmod(i*173.0+game.total_time*75,1440),fmod(i*139.0+game.total_time*610,900))
 			draw_line(rain,rain+Vector2(-5,23),Color(0.70,0.86,1,0.13),1,true)
-	# Peripheral speed streaks leave the road and collision cues unobstructed.
-	if game.boost_active and game.state == "race":
-		for i in 25:
-			var angle = i*2.39996
-			var radius = 430+fmod(game.total_time*720+i*91,360)
-			var dir = Vector2(cos(angle),sin(angle)*0.7)
-			draw_line(Vector2(720,440)+dir*radius,Vector2(720,440)+dir*(radius+55),Color(0.7,0.94,1,0.3),1.4,true)
+	# Twin edge wind tunnels: no lines across the central road or rider.
+	if game.boost_visual>0 and game.state=="race" and game.settings.shake:
+		for side in [-1,1]:
+			for i in 22:
+				var travel=fmod(game.elapsed*1.9+i*0.137,1.0)
+				var x=lerpf(345,5,travel) if side<0 else lerpf(1095,1435,travel)
+				var y=100+fmod(i*113.0,650)
+				var v=Vector2(side*(32+travel*90),(y-405)*0.18)
+				var opacity=sin(travel*PI)*game.boost_visual
+				draw_line(Vector2(x,y),Vector2(x,y)+v,Color(CYAN,opacity*0.10),6,true)
+				draw_line(Vector2(x,y),Vector2(x,y)+v,Color(WHITE,opacity*0.45),1.5,true)
 	_panel(Rect2(32,28,243,97),Color(0.04,0.09,0.15,0.78),7)
 	_text("ROAD RAGE",Vector2(48,61),27,WHITE,title_font)
 	var sectors = ["01 / "+game.world.course.name,"02 / 中段追逐","03 / 终点决战"]
@@ -252,24 +260,24 @@ func _race(interactive: bool = true) -> void:
 	_center("N" if game.speed<1 else "G%d"%clampi(int(game.speed/16)+1,1,6),c+Vector2(0,-40),18,ORANGE,number_font)
 	_center("%s/%s 转向   %s 刹车   %s/%s 攻击   %s 氮气   %s 车手信息   ESC 暂停"%[game.controls.label("steer_left"),game.controls.label("steer_right"),game.controls.label("brake"),game.controls.label("attack_left"),game.controls.label("attack_right"),game.controls.label("boost"),game.controls.label("show_roster")],Vector2(724,889),13,MUTED)
 	if game.combo>1 and game.combo_time>0:
-		_text("%d×"%game.combo,Vector2(1280,287),42,ORANGE,number_font)
-		_text("连击",Vector2(1300,315),16,WHITE)
+		_text("%d×"%game.combo,Vector2(205,268),42,ORANGE,number_font)
+		_text("连击",Vector2(253,292),16,WHITE)
 		var fraction = game.combo_time/5
-		draw_line(Vector2(1280,322),Vector2(1280+90*fraction,322),ORANGE,3,true)
+		draw_line(Vector2(205,301),Vector2(205+90*fraction,301),ORANGE,3,true)
 	if game.ride.airborne and game.ride.height>0.3 and game.player.recovery_time<=0:
-		_panel(Rect2(520,650,400,116),Color(0.03,0.10,0.16,0.82),8,CYAN)
-		_center("超人展体 / "+game.stunt.stage if game.stunt.active else "AIRBORNE / 腾空",Vector2(720,680),22,CYAN)
-		_center("离地 %.1fm   ·   %.1fs"%[game.ride.height,game.ride.air_time],Vector2(720,710),18,WHITE)
-		var hint=game.controls.label("aerial_stunt")+" 超人展体 · 自动回座 · 落地无车损"
-		if game.stunt.active: hint="人车分离中 · 即将自动回座"
+		_panel(FLIGHT_RECT,Color(0.03,0.10,0.16,0.72),7,CYAN)
+		_text("展体 / "+game.stunt.stage if game.stunt.active else "腾空",Vector2(1114,272),16,CYAN)
+		_text("%.1fm · %.1fs"%[game.ride.height,game.ride.air_time],Vector2(1250,272),16,WHITE)
+		var hint=game.controls.label("aerial_stunt")+" 展体 · 自动回座 · 落地无损"
+		if game.stunt.active: hint="人车分离 · 自动回座中"
 		elif game.stunt.pending_bonus: hint="已回座 · 落地追加 +300 分"
-		elif game.stunt_notice>0: hint="特技完成 +300 分 · 氮气 +12"
-		elif game.stunt.last_launch==game.ride.launches: hint="本次飞跃已施展 · 等待下一次起跳"
-		_center(hint,Vector2(720,747),14,WHITE)
+		elif game.stunt_notice>0: hint="特技完成 +300 分 / 氮气 +12"
+		elif game.stunt.last_launch==game.ride.launches: hint="本次已施展 · 等待下次起飞"
+		_text(hint,Vector2(1114,303),13,WHITE)
 	elif game.stunt_notice>0:
-		_center("超人展体成功 · +300 分 · 氮气 +12",Vector2(720,741),19,CYAN)
+		_text("展体成功 +300 分 / +12 氮气",Vector2(1114,291),14,CYAN)
 	elif not game.world.road_hint(game.distance).is_empty():
-		_center(game.world.road_hint(game.distance),Vector2(720,741),19,ORANGE)
+		_text(game.world.road_hint(game.distance),Vector2(1114,291),14,ORANGE)
 	_weapon_hud(interactive)
 	_draw_rival_markers()
 	_panel(Rect2(308,111,187,47),Color(0.04,0.09,0.15,0.86),6)
@@ -304,30 +312,31 @@ func _pursuit_indicator() -> void:
 	var f=_pursuit_feedback()
 	if not f.visible: return
 	var color: Color=f.color
-	_panel(Rect2(480,548,480,96),Color(0.04,0.07,0.12,0.94),10,color.darkened(0.3))
-	# Local, smooth emergency light bar; the road and the rest of the HUD never flash.
+	_panel(PURSUIT_RECT,Color(0.04,0.07,0.12,0.80),8,color.darkened(0.3))
 	var red=Color(Feedback.RED,0.3+f.pulse*0.55)
 	var blue=Color(Feedback.BLUE,0.85-f.pulse*0.55)
-	draw_line(Vector2(492,550),Vector2(714,550),color if f.mode=="escaped" else red,3,true)
-	draw_line(Vector2(726,550),Vector2(948,550),color if f.mode=="escaped" else blue,3,true)
-	_status_icon(f.icon,Vector2(520,585),26,color)
-	_text(f.title,Vector2(565,580),24,color)
+	draw_line(Vector2(1110,552),Vector2(1246,552),color if f.mode=="escaped" else red,3,true)
+	draw_line(Vector2(1258,552),Vector2(1397,552),color if f.mode=="escaped" else blue,3,true)
+	_status_icon(f.icon,Vector2(1128,580),17,color)
+	_text(f.title,Vector2(1155,580),17,color)
 	var label="后方" if game.police.lead_distance>=0 else "前方"
 	if f.mode!="escaped":
-		_text("%s %03d m"%[label,roundi(absf(game.police.lead_distance))],Vector2(801,578),16,WHITE)
-	var detail=game.police.status if f.mode!="escaped" else "+300 分 · 警方脱离追踪"
-	_text(detail,Vector2(565,602),13,MUTED)
-	var hint="散热时加速 · 拉开 %dm，保持 2.5s"%int(game.police.escape_required)
+		_text("%s %dm"%[label,roundi(absf(game.police.lead_distance))],Vector2(1305,580),12,WHITE)
+	var hint="拉开 %dm / 保持 2.5s"%int(game.police.escape_required)
+	var detail="警车散热时加速脱逃"
 	var progress=game.police.escape_progress
 	if f.mode=="danger":
-		hint="倒地被捕将罚款 $%d · 尽快恢复骑行"%(350+game.active_level*150)
+		hint="被捕罚款 $%d"%(350+game.active_level*150)
+		detail="倒地危险 · 恢复骑行后脱离抓捕"
 		progress=game.police.capture/0.65
 	elif f.mode=="escaped":
-		hint="继续冲线 · 短时间内不会出现新追捕"
+		hint="脱逃成功 +300 分"
+		detail="警方脱离追踪 · 继续冲线"
 		progress=1
-	_text(hint,Vector2(497,625),13,WHITE)
-	draw_rect(Rect2(493,635,454,3),Color("294052"))
-	draw_rect(Rect2(493,635,454*clampf(progress,0,1),3),color)
+	_text(hint,Vector2(1114,603),14,WHITE)
+	_text(detail,Vector2(1114,623),12,MUTED)
+	draw_rect(Rect2(1114,635,278,3),Color("294052"))
+	draw_rect(Rect2(1114,635,278*clampf(progress,0,1),3),color)
 
 func _start_lights() -> void:
 	var remaining=game.countdown if game.state=="countdown" else -game.elapsed
@@ -433,7 +442,7 @@ func _settings() -> void:
 	_shade(0.87)
 	_text("TUNE YOUR RIDE",Vector2(292,116),53,WHITE,title_font)
 	_text("游戏设置",Vector2(292,158),23,CYAN)
-	var rows = [["volume","主音量","%d%%"%roundi(game.settings.volume*100)],["music","电子配乐","开启" if game.settings.music else "关闭"],["shake","震动 / 界面动效","开启" if game.settings.shake else "关闭"],["quality","渲染质量","精致 · 120 FPS 上限" if game.settings.quality else "流畅 · 60 FPS 上限"],["map","赛道小地图","显示" if game.settings.map else "隐藏"],["mirror","实时后视镜","显示" if game.settings.mirror else "隐藏"],["bindings","修改快捷键","KEY BINDINGS  →"]]
+	var rows = [["volume","主音量","%d%%"%roundi(game.settings.volume*100)],["music","电子配乐","开启" if game.settings.music else "关闭"],["shake","震动 / 动效 / 氮气气流","开启" if game.settings.shake else "关闭"],["quality","渲染质量","精致 · 120 FPS 上限" if game.settings.quality else "流畅 · 60 FPS 上限"],["map","赛道小地图","显示" if game.settings.map else "隐藏"],["mirror","实时后视镜","显示" if game.settings.mirror else "隐藏"],["bindings","修改快捷键","KEY BINDINGS  →"]]
 	for i in rows.size(): _button(rows[i][0],rows[i][1],Rect2(292,201+i*68,856,53),false,rows[i][2])
 	_text("AI 数量、场景和五档难度在赛前设置；快捷键会自动保存。",Vector2(292,727),16,MUTED)
 	_button("back","返回",Rect2(292,766,250,55),true,"ESC")
@@ -488,7 +497,7 @@ func _results() -> void:
 		_text("比赛奖金 $%d  /  抵扣欠款 $%d  /  实际入账 $%d"%[Motion.count(game.race_income.gross,t,0.4,1.0),Motion.count(game.race_income.debt_paid,t,0.4,1.0),Motion.count(game.race_income.net,t,0.4,1.0)],Vector2(173,613),22,CYAN)
 	else:
 		_text("未完成比赛 · 本场无奖金 / 无新增罚款",Vector2(173,613),23,style.color)
-	_text("钱包 $%d   ·   待缴罚款 $%d   ·   奖金用于购买新摩托"%[game.economy.cash,game.economy.debt],Vector2(173,652),18,MUTED)
+	_text("钱包 $%d   ·   待缴罚款 $%d   ·   本场维修 $0（免费）"%[game.economy.cash,game.economy.debt],Vector2(173,652),18,MUTED)
 	_text("脱逃 %02d · 最远 %.0fm"%[game.police.escapes,game.best_jump],Vector2(969,448),16,CYAN)
 	_text("夺取武器 %02d"%game.weapons_claimed,Vector2(969,390),16,CYAN)
 	_text("飞跃 %02d / 反弹 %02d / 特技 %02d"%[game.jumps,game.bounces,game.stunts],Vector2(969,353),16,CYAN)
@@ -710,7 +719,7 @@ func _standings_board(interactive: bool) -> void:
 		_text("到达" if r.finished else "%.3f"%r.remaining_km,Vector2(316,y+13),12,CYAN if r.finished else (WHITE if r.id==-1 else MUTED),number_font if not r.finished else body_font)
 
 func _minimap() -> void:
-	var rect = Rect2(1175,330,232,277)
+	var rect = MAP_RECT
 	var f=_pursuit_feedback()
 	var tint=Color(Feedback.RED,f.tint)
 	var background=Color(0.03,0.08,0.14,0.86).blend(tint)
@@ -738,13 +747,13 @@ func _minimap() -> void:
 	draw_circle(player_pos,5,ORANGE)
 	_text("你",player_pos+Vector2(10,5),13,WHITE)
 	_text("FINISH",_map_position(game.track_length,0,rect)+Vector2(-24,-11),12,CYAN,number_font)
-	_text("方框：警车 / 橙点：你" if game.police.pursuit_active else "橙点：你  /  彩点：对手",rect.position+Vector2(15,258),12,MUTED)
+	_text("方框：警车 / 橙点：你" if game.police.pursuit_active else "橙点：你  /  彩点：对手",rect.position+Vector2(15,rect.size.y-15),12,MUTED)
 
 func _map_position(at: float, lane: float, rect: Rect2) -> Vector2:
 	var t = clampf(at/game.track_length,0,1)
 	var x = game.world.center_at(t*game.track_length)
 	var extent = game.world.course.curve[0]+game.world.course.curve[2]
-	return Vector2(rect.position.x+rect.size.x*0.5+x/maxf(extent,1)*70+lane*0.55,rect.position.y+231-t*175)
+	return Vector2(rect.position.x+rect.size.x*0.5+x/maxf(extent,1)*70+lane*0.55,rect.end.y-46-t*(rect.size.y-102))
 
 func _rear_view() -> void:
 	var rect = Rect2(516,106,420,125)
@@ -880,8 +889,8 @@ func _rebound_pop() -> void:
 	var t=clampf(1.0-game.rebound_timer/1.15,0,1)
 	var alpha=pow(1-t,1.3)
 	var scale=lerpf(0.82,1.48,1-pow(1-t,3)) if game.settings.shake else 1.0
-	var center=Vector2(720,350)
-	var radius=90+t*200 if game.settings.shake else 115
+	var center=Vector2(720,275)
+	var radius=38+t*40 if game.settings.shake else 50
 	for ring in 2:
 		draw_arc(center,radius+ring*20,-PI*0.92,-PI*0.08,48,Color(ORANGE,alpha*(0.65-ring*0.2)),3-ring,true)
 	if game.settings.shake:
@@ -889,8 +898,8 @@ func _rebound_pop() -> void:
 			var direction=Vector2.RIGHT.rotated(ray*TAU/12)
 			draw_line(center+direction*(radius+10),center+direction*(radius+28+game.rebound_power*25),Color(CYAN,alpha*0.55),2,true)
 	# Deliberately a playful chart-shaped impact badge, not financial advice.
-	var chart=PackedVector2Array([center+Vector2(-160,45),center+Vector2(-125,64),center+Vector2(-93,47),center+Vector2(-64,55),center+Vector2(-24,22)])
+	var chart=PackedVector2Array([center+Vector2(-130,12),center+Vector2(-112,25),center+Vector2(-95,10),center+Vector2(-80,17),center+Vector2(-62,-6)])
 	draw_polyline(chart,Color(CYAN,alpha),3,true)
-	_center("触底反弹",center+Vector2(2,2),int(48*scale),Color(0.02,0.05,0.09,alpha))
-	_center("触底反弹",center,int(48*scale),Color("ffcf91")*Color(1,1,1,alpha))
-	_center("REBOUND  ×%d  /  蓄势上扬"%game.rebound_chain,center+Vector2(55,54),17,Color(CYAN,alpha),number_font)
+	_center("触底反弹",center+Vector2(2,2),int(27*scale),Color(0.02,0.05,0.09,alpha))
+	_center("触底反弹",center,int(27*scale),Color("ffcf91")*Color(1,1,1,alpha))
+	_center("REBOUND  ×%d  /  蓄势上扬"%game.rebound_chain,center+Vector2(0,32),17,Color(CYAN,alpha),number_font)
