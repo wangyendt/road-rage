@@ -18,6 +18,10 @@ var weapon_notice = 0.0
 const RidePhysics = preload("res://scripts/ride_physics.gd")
 const TrafficData = preload("res://scripts/traffic_data.gd")
 var ride = RidePhysics.new()
+const AerialStunt = preload("res://scripts/aerial_stunt.gd")
+var stunt = AerialStunt.new()
+var stunts = 0
+var stunt_notice = 0.0
 var jumps = 0
 var bounces = 0
 var rebound_timer = 0.0
@@ -219,6 +223,7 @@ func _input(event: InputEvent) -> void:
 			if event.is_action_pressed("attack_right"): attack(1)
 			if event.is_action_pressed("attack_auto"): attack(_nearest_side())
 			if event.is_action_pressed("cycle_weapon"): cycle_weapon()
+			if event.is_action_pressed("aerial_stunt"): attempt_stunt()
 	elif event is InputEventJoypadButton and event.pressed:
 		if event.button_index==JOY_BUTTON_A: hud.activate_selected()
 		elif event.button_index==JOY_BUTTON_B: back()
@@ -306,6 +311,9 @@ func start_race() -> void:
 	ride = RidePhysics.new()
 	ride.configure(active_bike)
 	ride.reset(world,0)
+	stunt=AerialStunt.new()
+	stunts=0
+	stunt_notice=0
 	jumps=0
 	bounces=0
 	rebound_timer=0
@@ -366,6 +374,7 @@ func start_race() -> void:
 	_update_camera(1)
 
 func _clear_race() -> void:
+	_cancel_stunt()
 	for list in [rivals,traffic,pickups]:
 		for item in list:
 			if is_instance_valid(item.node): item.node.queue_free()
@@ -377,6 +386,7 @@ func _simulate(dt: float) -> void:
 	if not Input.is_action_pressed("boost") and not auto_drive: boost_lock=false
 	var previous_distance=distance
 	weapon_notice=maxf(0,weapon_notice-dt)
+	stunt_notice=maxf(0,stunt_notice-dt)
 	elapsed += dt
 	rebound_timer=maxf(0,rebound_timer-dt)
 	attack_cooldown = maxf(0,attack_cooldown-dt)
@@ -457,6 +467,16 @@ func _simulate(dt: float) -> void:
 			score+=150
 			nitro=minf(100,nitro+8)
 			if not landing.bounced: announce("稳稳落地","飞跃 %.0fm · +150 分 · 无车损"%landing.distance,Color("c6f2cb"),1.6)
+	if contact_event.landed:
+		if stunt.land():
+			stunts+=1
+			score+=AerialStunt.BONUS
+			nitro=minf(100,nitro+12)
+			stunt_notice=2.0
+			sound.sfx("pickup",-10,1.15)
+	elif stunt.active:
+		stunt.step(dt,AerialStunt.contact_eta(world,distance,speed,ride.y,ride.velocity))
+	player.pose_stunt(stunt.extension,stunt.active)
 	for rival in rivals: _simulate_rival(rival,dt)
 	_simulate_traffic(dt)
 	_simulate_pickups(dt)
@@ -735,8 +755,20 @@ func _spawn_pickup(at: float, x: float, kind: String) -> void:
 	add_child(n)
 	pickups.append({"node":n,"distance":at,"lane":x,"kind":kind})
 
+func attempt_stunt() -> bool:
+	if state!="race" or player.recovery_time>0 or player.attack_time>0 or attack_cooldown>0: return false
+	if not ride.airborne or ride.height<6: return false
+	var eta=AerialStunt.contact_eta(world,distance,speed,ride.y,ride.velocity)
+	if not stunt.start(ride.launches,eta): return false
+	sound.sfx("swing",-15,0.8)
+	return true
+
+func _cancel_stunt() -> void:
+	stunt.cancel()
+	if player: player.pose_stunt(0,false)
+
 func attack(side: int) -> void:
-	if state != "race" or attack_cooldown > 0 or player.recovery_time>0: return
+	if state != "race" or attack_cooldown > 0 or player.recovery_time>0 or stunt.active: return
 	var w=Weapons.data(loadout.current)
 	attack_cooldown = w.cooldown
 	player.swing(side)
@@ -799,6 +831,7 @@ func _nearest_side() -> int:
 
 func take_damage(amount: float, cause: String) -> void:
 	if damage_cooldown>0 or state!="race" or player.recovery_time>0: return
+	_cancel_stunt()
 	last_damage_cause = cause
 	health = maxf(0,health-amount*Data.difficulty(active_level).damage*active_bike.armor)
 	damage_cooldown = 1.1
@@ -817,6 +850,7 @@ func take_damage(amount: float, cause: String) -> void:
 
 func trigger_crash() -> void:
 	if player.recovery_time>0: return
+	_cancel_stunt()
 	rebound_timer=0
 	crashes += 1
 	impact_meter = 0
@@ -889,6 +923,7 @@ func rank_now() -> int:
 
 func finish_race(reason: String) -> void:
 	if state != "race": return
+	_cancel_stunt()
 	final_rank = rank_now()
 	finish_reason = reason
 	state = "finished"
@@ -1113,6 +1148,8 @@ func _create_mirror() -> void:
 	mirror_view.msaa_3d = Viewport.MSAA_DISABLED
 	add_child(mirror_view)
 	mirror_camera = Camera3D.new()
+	# The local bike/rider is on layer 2; airborne poses must not cover the mirror.
+	mirror_camera.set_cull_mask_value(2,false)
 	mirror_camera.fov = 82
 	mirror_camera.far = 220
 	mirror_view.add_child(mirror_camera)
@@ -1152,7 +1189,7 @@ func arrest_player() -> void:
 	finish_race("busted")
 
 func cycle_weapon() -> void:
-	if state!="race" or player.recovery_time>0: return
+	if state!="race" or player.recovery_time>0 or stunt.active: return
 	if player.attack_time>0 or attack_cooldown>0:
 		return # Switching cannot cancel a heavy weapon's recovery/cooldown.
 	loadout.cycle()

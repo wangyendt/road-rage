@@ -20,6 +20,7 @@ var down_time = 0.0
 var is_player = false
 var glow: OmniLight3D
 var legs: Array[Node3D] = []
+var stunt_pose_active = false
 var recovery_time = 0.0
 var recovery_elapsed = 0.0
 var recovery_duration = 3.85
@@ -162,6 +163,11 @@ func build(color: Color, player: bool = false, shape: int = 0) -> void:
 	chassis.add_child(glow)
 	for part in rider.get_children(): part.position -= Vector3(0,1.4,0.2)
 	rider.position = Vector3(0,1.4,0.2)
+	_apply_view_layers(self)
+
+func _apply_view_layers(root: Node) -> void:
+	if not is_player: return
+	for mesh in root.find_children("*","GeometryInstance3D",true,false): mesh.layers=2
 
 func _arm(parent: Node3D, side: int, jacket: Material, glove: Material) -> Node3D:
 	var arm = Node3D.new()
@@ -216,6 +222,20 @@ func animate(dt: float, speed: float, steer: float, boost: bool, time: float) ->
 		flame.scale.z = 3.5+sin(time*65)*1.5
 	glow.light_energy = 1.2 if boost else 0.0
 
+func pose_stunt(amount: float, active: bool) -> void:
+	if recovery_time>0: return
+	if not active and not stunt_pose_active: return
+	stunt_pose_active=active
+	var t=clampf(amount,0,1) if active else 0.0
+	# Rider leaves the seat and extends above/behind the motorcycle, then remounts.
+	# Keep the bike's wheels/chassis and the gameplay collision envelope unchanged.
+	rider.position=Vector3(0,1.4,0.2)+Vector3(0,1.55,1.5)*t
+	rider.rotation=Vector3(-1.12*t,0,0)
+	arm_l.rotation=Vector3(-0.35*t,0,-0.95*t)
+	arm_r.rotation=Vector3(-0.35*t,0,0.95*t)
+	for leg in legs: leg.rotation=Vector3(-0.5*t,0,0)
+	if weapon_visual: weapon_visual.visible=not active and Weapons.armed(equipped_weapon)
+
 func swing(side: int) -> void:
 	attack_side = side
 	attack_duration=Weapons.data(equipped_weapon).duration
@@ -223,6 +243,7 @@ func swing(side: int) -> void:
 
 func begin_crash(side: float = 1.0) -> void:
 	if recovery_time>0: return
+	pose_stunt(0,false)
 	crash_side = side
 	recovery_elapsed = 0
 	recovery_time = recovery_duration
@@ -233,6 +254,7 @@ func begin_crash(side: float = 1.0) -> void:
 	glow.light_energy = 0
 
 func reset_pose() -> void:
+	stunt_pose_active=false
 	recovery_time = 0
 	recovery_elapsed = 0
 	recovery_stage = ""
@@ -305,6 +327,7 @@ func set_weapon(id: String) -> void:
 	weapon_visual.build(equipped_weapon)
 	weapon_visual.position=Vector3(0.16,-0.44,-0.65)
 	weapon_visual.rotation=Vector3(0.45,0,-0.25)
+	_apply_view_layers(weapon_visual)
 	if recovery_time>0: weapon_visual.visible=false
 
 func react_to_hit(side: float) -> void:

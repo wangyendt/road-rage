@@ -257,9 +257,17 @@ func _race(interactive: bool = true) -> void:
 		var fraction = game.combo_time/5
 		draw_line(Vector2(1280,322),Vector2(1280+90*fraction,322),ORANGE,3,true)
 	if game.ride.airborne and game.ride.height>0.3 and game.player.recovery_time<=0:
-		_panel(Rect2(545,663,350,85),Color(0.03,0.10,0.16,0.82),8,CYAN)
-		_center("AIRBORNE  /  腾空",Vector2(720,693),23,CYAN,number_font)
-		_center("离地 %.1fm   ·   %.1fs"%[game.ride.height,game.ride.air_time],Vector2(720,729),20,WHITE)
+		_panel(Rect2(520,650,400,116),Color(0.03,0.10,0.16,0.82),8,CYAN)
+		_center("超人展体 / "+game.stunt.stage if game.stunt.active else "AIRBORNE / 腾空",Vector2(720,680),22,CYAN)
+		_center("离地 %.1fm   ·   %.1fs"%[game.ride.height,game.ride.air_time],Vector2(720,710),18,WHITE)
+		var hint=game.controls.label("aerial_stunt")+" 超人展体 · 自动回座 · 落地无车损"
+		if game.stunt.active: hint="人车分离中 · 即将自动回座"
+		elif game.stunt.pending_bonus: hint="已回座 · 落地追加 +300 分"
+		elif game.stunt_notice>0: hint="特技完成 +300 分 · 氮气 +12"
+		elif game.stunt.last_launch==game.ride.launches: hint="本次飞跃已施展 · 等待下一次起跳"
+		_center(hint,Vector2(720,747),14,WHITE)
+	elif game.stunt_notice>0:
+		_center("超人展体成功 · +300 分 · 氮气 +12",Vector2(720,741),19,CYAN)
 	elif not game.world.road_hint(game.distance).is_empty():
 		_center(game.world.road_hint(game.distance),Vector2(720,741),19,ORANGE)
 	_weapon_hud(interactive)
@@ -434,9 +442,9 @@ func _help() -> void:
 	_shade(0.88)
 	_text("LEARN THE STREETS",Vector2(180,136),56,WHITE,title_font)
 	_text("驾驶指南",Vector2(180,184),24,CYAN)
-	var rows = [[game.controls.label("steer_left")+" / "+game.controls.label("steer_right"),"左右转向（方向键也可用）","左摇杆"],[game.controls.label("brake"),"刹车 · 松开恢复自动油门","LT"],[game.controls.label("boost"),"按住氮气加速 · 松开恢复","RT / A"],[game.controls.label("attack_left")+" / "+game.controls.label("attack_right"),"左右攻击，连续命中击倒","LB / RB"],[game.controls.label("attack_auto"),"自动选择攻击方向","—"],[game.controls.label("show_roster"),"查看车手信息（自动暂停）","BACK"],[game.controls.label("cycle_weapon"),"切换拳击 / 踢击 / 夺来的武器","Y"],["ESC / "+game.controls.label("pause_game"),"暂停 / 继续；M 静音，F11 全屏","START"]]
+	var rows = [[game.controls.label("steer_left")+" / "+game.controls.label("steer_right"),"左右转向（方向键也可用）","左摇杆"],[game.controls.label("brake"),"刹车 · 松开恢复自动油门","LT"],[game.controls.label("boost"),"按住氮气加速 · 松开恢复","RT / A"],[game.controls.label("attack_left")+" / "+game.controls.label("attack_right"),"左右攻击，连续命中击倒","LB / RB"],[game.controls.label("attack_auto"),"自动选择攻击方向","—"],[game.controls.label("show_roster"),"查看车手信息（自动暂停）","BACK"],[game.controls.label("cycle_weapon"),"切换拳击 / 踢击 / 夺来的武器","Y"],[game.controls.label("aerial_stunt"),"空中离座展体 · 自动回座 · 所有地图落地无车损","X"],["ESC / "+game.controls.label("pause_game"),"暂停 / 继续；M 静音，F11 全屏","START"]]
 	for i in rows.size():
-		var y = 246+i*57
+		var y = 232+i*51
 		draw_line(Vector2(180,y+20),Vector2(1260,y+20),Color(0.4,0.6,0.7,0.18),1)
 		_text(rows[i][0],Vector2(185,y),18,WHITE)
 		_text(rows[i][1],Vector2(480,y),18,MUTED)
@@ -481,9 +489,9 @@ func _results() -> void:
 	else:
 		_text("未完成比赛 · 本场无奖金 / 无新增罚款",Vector2(173,613),23,style.color)
 	_text("钱包 $%d   ·   待缴罚款 $%d   ·   奖金用于购买新摩托"%[game.economy.cash,game.economy.debt],Vector2(173,652),18,MUTED)
-	_text("脱逃  %02d"%game.police.escapes,Vector2(1027,448),19,CYAN)
+	_text("脱逃 %02d · 最远 %.0fm"%[game.police.escapes,game.best_jump],Vector2(969,448),16,CYAN)
 	_text("夺取武器 %02d"%game.weapons_claimed,Vector2(969,390),16,CYAN)
-	_text("飞跃 %02d / %.0fm / 反弹 %02d"%[game.jumps,game.best_jump,game.bounces],Vector2(969,353),16,CYAN)
+	_text("飞跃 %02d / 反弹 %02d / 特技 %02d"%[game.jumps,game.bounces,game.stunts],Vector2(969,353),16,CYAN)
 	# Controls keep stable hitboxes throughout the entrance animation.
 	content_alpha=1
 	draw_set_transform(ui_offset,0,Vector2.ONE*ui_scale)
@@ -639,7 +647,7 @@ func _bindings() -> void:
 	_text("快捷键设置",Vector2(122,176),25,CYAN)
 	for i in Controls.ORDER.size():
 		var action = Controls.ORDER[i]
-		var rect = Rect2(120+int(i/6)*650,229+(i%6)*70,594,56)
+		var rect = Rect2(120+int(i/7)*650,229+(i%7)*62,594,53)
 		_button("bind:"+action,Controls.LABELS[action],rect,game.rebinding==action,"等待按键…" if game.rebinding==action else game.controls.label(action))
 	_paragraph(game.binding_message,Vector2(123,693),1180,18,ORANGE if not game.rebinding.is_empty() else CYAN)
 	_text("保留键：ESC、Enter、方向键、F11、M、R。菜单导航不受游戏改键影响。",Vector2(123,736),16,MUTED)

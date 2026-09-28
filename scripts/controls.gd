@@ -1,7 +1,7 @@
 extends RefCounted
-const ORDER = ["steer_left","steer_right","brake","boost","attack_left","attack_right","attack_auto","pause_game","show_roster","toggle_map","toggle_mirror","cycle_weapon"]
-const LABELS = {"steer_left":"向左转向","steer_right":"向右转向","brake":"刹车","boost":"氮气加速","attack_left":"向左攻击","attack_right":"向右攻击","attack_auto":"自动选边攻击","pause_game":"暂停 / 继续","show_roster":"车手信息","toggle_map":"显示小地图","toggle_mirror":"显示后视镜","cycle_weapon":"切换武器 / 拳脚"}
-const DEFAULTS = {"steer_left":KEY_A,"steer_right":KEY_D,"brake":KEY_S,"boost":KEY_SPACE,"attack_left":KEY_J,"attack_right":KEY_K,"attack_auto":KEY_SHIFT,"pause_game":KEY_P,"show_roster":KEY_TAB,"toggle_map":KEY_V,"toggle_mirror":KEY_B,"cycle_weapon":KEY_Q}
+const ORDER = ["steer_left","steer_right","brake","boost","attack_left","attack_right","attack_auto","pause_game","show_roster","toggle_map","toggle_mirror","cycle_weapon","aerial_stunt"]
+const LABELS = {"steer_left":"向左转向","steer_right":"向右转向","brake":"刹车","boost":"氮气加速","attack_left":"向左攻击","attack_right":"向右攻击","attack_auto":"自动选边攻击","pause_game":"暂停 / 继续","show_roster":"车手信息","toggle_map":"显示小地图","toggle_mirror":"显示后视镜","cycle_weapon":"切换武器 / 拳脚","aerial_stunt":"空中特技 / 自动回座"}
+const DEFAULTS = {"steer_left":KEY_A,"steer_right":KEY_D,"brake":KEY_S,"boost":KEY_SPACE,"attack_left":KEY_J,"attack_right":KEY_K,"attack_auto":KEY_SHIFT,"pause_game":KEY_P,"show_roster":KEY_TAB,"toggle_map":KEY_V,"toggle_mirror":KEY_B,"cycle_weapon":KEY_Q,"aerial_stunt":KEY_E}
 const RESERVED = [KEY_ESCAPE,KEY_ENTER,KEY_KP_ENTER,KEY_UP,KEY_DOWN,KEY_LEFT,KEY_RIGHT,KEY_F11,KEY_M,KEY_R]
 var keys: Dictionary = DEFAULTS.duplicate()
 
@@ -21,7 +21,7 @@ func apply() -> void:
 		event.axis = row[1]
 		event.axis_value = row[2]
 		InputMap.action_add_event(row[0],event)
-	for row in [["boost",JOY_BUTTON_A],["attack_left",JOY_BUTTON_LEFT_SHOULDER],["attack_right",JOY_BUTTON_RIGHT_SHOULDER],["pause_game",JOY_BUTTON_START],["show_roster",JOY_BUTTON_BACK],["cycle_weapon",JOY_BUTTON_Y]]:
+	for row in [["boost",JOY_BUTTON_A],["attack_left",JOY_BUTTON_LEFT_SHOULDER],["attack_right",JOY_BUTTON_RIGHT_SHOULDER],["pause_game",JOY_BUTTON_START],["show_roster",JOY_BUTTON_BACK],["cycle_weapon",JOY_BUTTON_Y],["aerial_stunt",JOY_BUTTON_X]]:
 		var event = InputEventJoypadButton.new()
 		event.button_index = row[1]
 		InputMap.action_add_event(row[0],event)
