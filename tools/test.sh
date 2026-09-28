@@ -48,5 +48,7 @@ grep -q 'FLIGHT_CAMERA_TEST_RESULTS passed=33 failed=0' "$ROOT/builds/test-logs/
 grep -q 'STUNT_TEST_RESULTS passed=75 failed=0' "$ROOT/builds/test-logs/stunts.log"
 "$GODOT" --path "$ROOT" --script tests/test_stunts_ui.gd 2>&1 | tee "$ROOT/builds/test-logs/stunts-ui.log"
 grep -q 'STUNT_UI_TEST_RESULTS passed=20 failed=0' "$ROOT/builds/test-logs/stunts-ui.log"
+"$GODOT" --path "$ROOT" --script tests/test_visibility.gd 2>&1 | tee "$ROOT/builds/test-logs/visibility.log"
+grep -q 'VISIBILITY_TEST_RESULTS passed=28 failed=0' "$ROOT/builds/test-logs/visibility.log"
 if grep -E '^(SCRIPT ERROR:|ERROR:)'   "$ROOT/builds/test-logs/"*.log; then exit 1; fi
-printf '\nAll 614 assertions passed.\n'
+printf '\nAll 642 assertions passed.\n'
