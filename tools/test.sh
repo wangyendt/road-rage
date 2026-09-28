@@ -38,5 +38,9 @@ grep -q 'CHALLENGE_UI_TEST_RESULTS passed=12 failed=0' "$ROOT/builds/test-logs/c
 grep -q 'REBOUND_TEST_RESULTS passed=44 failed=0' "$ROOT/builds/test-logs/rebound.log"
 "$GODOT" --path "$ROOT" --script tests/test_rebound_ui.gd 2>&1 | tee "$ROOT/builds/test-logs/rebound-ui.log"
 grep -q 'REBOUND_UI_TEST_RESULTS passed=21 failed=0' "$ROOT/builds/test-logs/rebound-ui.log"
+"$GODOT" --headless --path "$ROOT" --script tests/test_race_feedback.gd 2>&1 | tee "$ROOT/builds/test-logs/race-feedback.log"
+grep -q 'RACE_FEEDBACK_TEST_RESULTS passed=30 failed=0' "$ROOT/builds/test-logs/race-feedback.log"
+"$GODOT" --path "$ROOT" --script tests/test_race_feedback_ui.gd 2>&1 | tee "$ROOT/builds/test-logs/race-feedback-ui.log"
+grep -q 'RACE_FEEDBACK_UI_TEST_RESULTS passed=20 failed=0' "$ROOT/builds/test-logs/race-feedback-ui.log"
 if grep -E '^(SCRIPT ERROR:|ERROR:)'   "$ROOT/builds/test-logs/"*.log; then exit 1; fi
-printf '\nAll 436 assertions passed.\n'
+printf '\nAll 486 assertions passed.\n'

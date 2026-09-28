@@ -77,6 +77,7 @@ var message_sub = ""
 var message_time = 0.0
 var message_color = Color("acf2ed")
 var finish_reason = ""
+var last_damage_cause = ""
 var final_rank = 6
 var best_score = 0
 var best_time = 0.0
@@ -244,7 +245,7 @@ func _process(raw_dt: float) -> void:
 	var racing = state == "race"
 	sound.update_audio(dt,speed,boost_active,racing)
 	sound.update_air_audio(dt,speed,racing and ride.airborne)
-	sound.update_world_audio(track_length-distance,police.intensity,racing,dt,police.pitch)
+	sound.update_world_audio(track_length-distance,police.intensity,racing,dt,police.pitch,police.urgency,police.pan)
 	if menu_backdrop():
 		demo_distance += dt*12
 		world.update_track(demo_distance,track_length)
@@ -337,6 +338,8 @@ func start_race() -> void:
 	pickup_timer = 1
 	message_time = 0
 	finish_reason = ""
+	last_damage_cause = ""
+	sound.countdown_cues.clear()
 	hud.selected = 0
 	player.reset_pose()
 	crashes = 0
@@ -800,6 +803,7 @@ func _nearest_side() -> int:
 
 func take_damage(amount: float, cause: String) -> void:
 	if damage_cooldown>0 or state!="race" or player.recovery_time>0: return
+	last_damage_cause = cause
 	health = maxf(0,health-amount*Data.difficulty(active_level).damage*active_bike.armor)
 	damage_cooldown = 1.1
 	damage_flash = 0.9
@@ -899,7 +903,7 @@ func finish_race(reason: String) -> void:
 		if previous<=0 or elapsed<previous: records[record_key]=elapsed
 		sound.sfx("finish",-1)
 	else:
-		sound.sfx("defeat",-5)
+		sound.sfx("busted" if reason=="busted" else "defeat",-5)
 		player.down_time = 4
 		player.chassis.rotation.z = 1.25
 	best_score = maxi(best_score,score)

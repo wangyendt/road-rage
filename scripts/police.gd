@@ -12,6 +12,9 @@ var intensity = 0.0
 var enabled = true
 var status = ""
 var pitch = 1.0
+var pan = 0.0
+var urgency = 0.0
+var escaped_at = -1000.0
 var escape_progress = 0.0
 var escape_required = ESCAPE_GAP
 var lead_distance = 0.0
@@ -27,10 +30,13 @@ func reset() -> void:
 	intensity=0
 	status=""
 	pitch=1
+	pan=0
+	urgency=0
 	escape_progress=0
 	escape_required=ESCAPE_GAP
 	lead_distance=0
 	escapes=0
+	escaped_at=-1000
 	grace_until=0
 	pursuit_active=false
 
@@ -75,6 +81,8 @@ func update(dt: float) -> void:
 	intensity=0
 	status=""
 	pitch=1
+	pan=0
+	urgency=0
 	escape_progress=0
 	escape_required=ESCAPE_GAP
 	lead_distance=0
@@ -173,8 +181,8 @@ func update_visual(u: Dictionary) -> void:
 	u.car.position=game.world.relative_position(u.lane,u.distance,game.distance)
 	u.car.rotation.y=game.world.yaw_at(u.distance)
 	u.car.rotation.x=atan(game.world.slope_at(u.distance))
-	u.red.visible=not u.retreat and fmod(game.total_time,0.28)<0.14
-	u.blue.visible=not u.retreat and not u.red.visible
+	u.red.visible=not u.retreat and (not game.settings.shake or sin(game.elapsed*TAU*1.25)>=0)
+	u.blue.visible=not u.retreat and (not game.settings.shake or not u.red.visible)
 	u.officer.visible=u.on_foot
 	u.officer.position=game.world.relative_position(u.foot_lane,u.foot_distance,game.distance)
 	if u.on_foot:
@@ -187,6 +195,7 @@ func _escape(u: Dictionary) -> void:
 	u.retreat_age=0
 	u.on_foot=false
 	escapes+=1
+	escaped_at=game.elapsed
 	capture=0
 	pursuit_active=false
 	escape_progress=1
@@ -204,3 +213,5 @@ func _update_acoustics(u: Dictionary, old_lane: float, dt: float, fade: float = 
 	if gain>intensity:
 		intensity=gain
 		pitch=sample.pitch
+		pan=clampf((u.lane-game.lane)/maxf(12,sample.distance),-0.8,0.8)
+		urgency=(1-smoothstep(12,75,sample.distance))*fade

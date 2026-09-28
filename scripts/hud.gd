@@ -2,6 +2,7 @@ extends Control
 ## Resolution-independent, keyboard/gamepad-accessible arcade interface.
 const Weapons = preload("res://scripts/weapons.gd")
 const Data = preload("res://scripts/game_data.gd")
+const Feedback = preload("res://scripts/race_feedback.gd")
 const Motion = preload("res://scripts/result_motion.gd")
 const Progress = preload("res://scripts/race_progress.gd")
 const Controls = preload("res://scripts/controls.gd")
@@ -277,14 +278,7 @@ func _race(interactive: bool = true) -> void:
 	if game.rebound_timer>0 and game.state in ["race","paused"]: _rebound_pop()
 	if game.elapsed<7 and game.state=="race" and game.message_time<=0:
 		_center("自动油门 · 靠近对手后，按 %s / %s 出击"%[game.controls.label("attack_left"),game.controls.label("attack_right")],Vector2(720,320),19,WHITE)
-	if game.police.pursuit_active and game.state in ["race","paused"]:
-		_panel(Rect2(480,563,480,71),Color(0.13,0.04,0.11,0.92),8,Color("ff687e"))
-		_center(game.police.status,Vector2(720,590),18,Color("ff95a0"))
-		var hint="散热时用氮气 · 领先 %dm 保持 2.5s 脱逃"%int(game.police.escape_required)
-		if game.player.recovery_time>0: hint="倒地被捕：罚款 $%d 并退赛"%(350+game.active_level*150)
-		_center(hint,Vector2(720,614),14,WHITE)
-		if game.police.escape_progress>0: draw_rect(Rect2(490,625,460*game.police.escape_progress,4),CYAN)
-		if game.police.capture>0: draw_rect(Rect2(490,625,460*game.police.capture/0.65,4),ORANGE)
+	if game.state in ["race","paused"]: _pursuit_indicator()
 	if game.player.recovery_time>0:
 		_panel(Rect2(475,660,490,96),Color(0.04,0.08,0.14,0.88),8)
 		_center(game.player.recovery_stage,Vector2(720,693),26,ORANGE)
@@ -293,12 +287,100 @@ func _race(interactive: bool = true) -> void:
 		draw_rect(Rect2(496,736,448*(1-game.player.recovery_time/game.player.recovery_duration),5),ORANGE)
 	elif game.catchup_help>2 and not game.ride.airborne:
 		_center("追赶辅助生效 · 引擎响应与氮气恢复提升",Vector2(720,756),14,CYAN)
-	if game.state=="countdown":
-		var n = ceili(game.countdown)
-		draw_circle(Vector2(720,391),79,Color(0.03,0.09,0.15,0.75))
-		_center(str(mini(3,n)),Vector2(720,429),112,WHITE,number_font)
-		_center("准备出发",Vector2(720,527),26,CYAN)
-		_center("自动油门  /  %s %s 转向  /  %s %s 攻击  /  %s 加速"%[game.controls.label("steer_left"),game.controls.label("steer_right"),game.controls.label("attack_left"),game.controls.label("attack_right"),game.controls.label("boost")],Vector2(720,567),18,WHITE)
+	if game.state=="countdown" or (game.state=="race" and game.elapsed<0.85): _start_lights()
+
+func _pursuit_feedback() -> Dictionary:
+	return Feedback.pursuit(game.police.pursuit_active,game.police.capture,game.player.recovery_time>0,game.police.escape_progress,game.elapsed-game.police.escaped_at,game.elapsed,game.settings.shake)
+
+func _pursuit_indicator() -> void:
+	var f=_pursuit_feedback()
+	if not f.visible: return
+	var color: Color=f.color
+	_panel(Rect2(480,548,480,96),Color(0.04,0.07,0.12,0.94),10,color.darkened(0.3))
+	# Local, smooth emergency light bar; the road and the rest of the HUD never flash.
+	var red=Color(Feedback.RED,0.3+f.pulse*0.55)
+	var blue=Color(Feedback.BLUE,0.85-f.pulse*0.55)
+	draw_line(Vector2(492,550),Vector2(714,550),color if f.mode=="escaped" else red,3,true)
+	draw_line(Vector2(726,550),Vector2(948,550),color if f.mode=="escaped" else blue,3,true)
+	_status_icon(f.icon,Vector2(520,585),26,color)
+	_text(f.title,Vector2(565,580),24,color)
+	var label="后方" if game.police.lead_distance>=0 else "前方"
+	if f.mode!="escaped":
+		_text("%s %03d m"%[label,roundi(absf(game.police.lead_distance))],Vector2(801,578),16,WHITE)
+	var detail=game.police.status if f.mode!="escaped" else "+300 分 · 警方脱离追踪"
+	_text(detail,Vector2(565,602),13,MUTED)
+	var hint="散热时加速 · 拉开 %dm，保持 2.5s"%int(game.police.escape_required)
+	var progress=game.police.escape_progress
+	if f.mode=="danger":
+		hint="倒地被捕将罚款 $%d · 尽快恢复骑行"%(350+game.active_level*150)
+		progress=game.police.capture/0.65
+	elif f.mode=="escaped":
+		hint="继续冲线 · 短时间内不会出现新追捕"
+		progress=1
+	_text(hint,Vector2(497,625),13,WHITE)
+	draw_rect(Rect2(493,635,454,3),Color("294052"))
+	draw_rect(Rect2(493,635,454*clampf(progress,0,1),3),color)
+
+func _start_lights() -> void:
+	var remaining=game.countdown if game.state=="countdown" else -game.elapsed
+	var lights=Feedback.start_signal(remaining)
+	var green=Feedback.GREEN
+	var alpha=1.0 if not lights.go else clampf(1-game.elapsed/0.85,0,1)
+	var color=green if lights.go else Feedback.RED
+	_panel(Rect2(557,345,326,79),Color(INK,0.94*alpha),12,Color(color,0.3*alpha))
+	for i in 3:
+		var c=Vector2(630+i*90,384)
+		var lit=lights.go or i<lights.lit
+		draw_circle(c,29,Color(Color("02080e"),alpha))
+		draw_circle(c,23,Color(color if lit else Color("25303b"),alpha))
+		if lit:
+			draw_arc(c,27,0,TAU,36,Color(color,0.3*alpha),2,true)
+			# LED matrix rather than a flat colored disc.
+			for x in range(-2,3):
+				for y in range(-2,3):
+					if x*x+y*y<=5: draw_circle(c+Vector2(x,y)*7,1.6,Color(WHITE,0.42*alpha))
+	var phase=1-fmod(maxf(0,remaining),1)
+	var size=72+(int(8*(1-phase)) if game.settings.shake and not lights.go else 0)
+	_center(lights.label,Vector2(720,513),size,Color(green if lights.go else WHITE,alpha),number_font)
+	_center("全速出击" if lights.go else "绿灯亮起后自动起步",Vector2(720,546),18,Color(green if lights.go else MUTED,alpha))
+	if not lights.go:
+		_center("%s %s 转向  /  %s %s 攻击  /  %s 氮气"%[game.controls.label("steer_left"),game.controls.label("steer_right"),game.controls.label("attack_left"),game.controls.label("attack_right"),game.controls.label("boost")],Vector2(720,578),16,WHITE)
+
+func _status_icon(kind: String, c: Vector2, radius: float, color: Color) -> void:
+	# Hand-drawn vector pictograms remain crisp and do not depend on emoji fonts.
+	var z=radius/24.0
+	var width=maxf(1.5,2.4*z)
+	match kind:
+		"siren":
+			draw_arc(c+Vector2(0,3)*z,14*z,PI,TAU,24,color,width,true)
+			draw_line(c+Vector2(-14,3)*z,c+Vector2(-14,12)*z,color,width,true)
+			draw_line(c+Vector2(14,3)*z,c+Vector2(14,12)*z,color,width,true)
+			draw_line(c+Vector2(-19,14)*z,c+Vector2(19,14)*z,color,width*1.5,true)
+			for angle in [PI*1.15,PI*1.5,PI*1.85]:
+				draw_line(c+Vector2.from_angle(angle)*19*z,c+Vector2.from_angle(angle)*25*z,color,width,true)
+			draw_line(c+Vector2(4,-5)*z,c+Vector2(7,4)*z,WHITE,width,true)
+		"cuffs":
+			for side in [-1,1]:
+				draw_arc(c+Vector2(side*13,side*4)*z,9*z,0,TAU,28,color,width,true)
+				draw_line(c+Vector2(side*19,-8+side*4)*z,c+Vector2(side*16,-3+side*4)*z,color,width,true)
+			draw_line(c+Vector2(-4,-4)*z,c+Vector2(4,4)*z,color,width,true)
+		"check":
+			draw_arc(c,23*z,0,TAU,40,color,width,true)
+			draw_polyline(PackedVector2Array([c+Vector2(-12,0)*z,c+Vector2(-3,9)*z,c+Vector2(13,-10)*z]),color,width*1.5,true)
+		"trophy":
+			draw_polyline(PackedVector2Array([c+Vector2(-13,-18)*z,c+Vector2(-10,1)*z,c+Vector2(0,10)*z,c+Vector2(10,1)*z,c+Vector2(13,-18)*z,c+Vector2(-13,-18)*z]),color,width,true)
+			for side in [-1,1]: draw_arc(c+Vector2(side*13,-10)*z,8*z,-PI/2,PI/2,20,color,width,true)
+			draw_line(c+Vector2(0,10)*z,c+Vector2(0,20)*z,color,width,true)
+			draw_line(c+Vector2(-11,21)*z,c+Vector2(11,21)*z,color,width,true)
+		"flag":
+			draw_line(c+Vector2(-18,-22)*z,c+Vector2(-18,23)*z,color,width,true)
+			for x in 4:
+				for y in 3: draw_rect(Rect2(c+Vector2(-16+x*9,-22+y*9)*z,Vector2(9,9)*z),color if (x+y)%2==0 else Color("243b53"))
+		"wreck":
+			for side in [-1,1]: draw_arc(c+Vector2(side*16,12)*z,7*z,0,TAU,24,color,width,true)
+			draw_polyline(PackedVector2Array([c+Vector2(-16,12)*z,c+Vector2(-7,-1)*z,c+Vector2(-1,9)*z]),color,width,true)
+			draw_polyline(PackedVector2Array([c+Vector2(16,12)*z,c+Vector2(11,-4)*z,c+Vector2(17,-7)*z]),color,width,true)
+			draw_polyline(PackedVector2Array([c+Vector2(2,-23)*z,c+Vector2(-4,-12)*z,c+Vector2(5,-12)*z,c+Vector2(-1,-3)*z]),color,width,true)
 
 func _draw_rival_markers() -> void:
 	var candidates = game.rivals.duplicate()
@@ -365,21 +447,24 @@ func _help() -> void:
 	_button("back","准备好了",Rect2(180,791,275,57),true,"ESC")
 
 func _results() -> void:
-	var t=game.result_time
+	var t=game.result_time if game.settings.shake else 2.0
+	var style=Feedback.result(game.finish_reason,game.final_rank,game.last_damage_cause)
 	_shade(0.79)
 	_results_backdrop(t,game.finish_reason=="finished")
 	var offset=Motion.offset(t,game.settings.shake)
 	draw_set_transform(ui_offset+offset*ui_scale,0,Vector2.ONE*ui_scale)
 	content_alpha=0.08+Motion.reveal(t,0,0.45)*0.92
 	var win = game.finish_reason=="finished"
-	var champ = win and game.final_rank==1
 	var busted=game.finish_reason=="busted"
-	_text("BUSTED" if busted else (("CHAMPION" if champ else "RACE COMPLETE") if win else "RIDE ENDED"),Vector2(168,135),56,WHITE,title_font)
-	_text("被警方截停 · 本场退赛" if busted else ("冠军属于你" if champ else ("漂亮冲线" if win else "下次，再快一点")),Vector2(168,191),34,ORANGE)
+	_text(style.title,Vector2(168,135),56,WHITE,title_font)
+	_text(style.subtitle,Vector2(168,191),34,style.color)
+	_panel(Rect2(1028,77,242,163),Color(INK,0.8),12,Color(style.color,0.5))
+	_status_icon(style.icon,Vector2(1149,138),39,Color(style.color,content_alpha))
+	_center(style.badge,Vector2(1149,213),16,style.color)
 	_text(game.world.course.name+" / "+game.world.course.en+"  ·  LV.%d"%game.active_level,Vector2(170,232),18,MUTED)
-	_panel(Rect2(170,275,1100,300),Color(0.04,0.09,0.15,0.9),12,Color("334c5a"))
+	_panel(Rect2(170,275,1100,300),Color(0.04,0.09,0.15,0.9),12,Color(style.color,0.55))
 	_text("最终名次" if win else "比赛进度",Vector2(205,319),17,MUTED)
-	_text("%02d"%game.final_rank if win else "%d%%"%int(game.distance/game.track_length*100),Vector2(205,458),128,ORANGE,number_font)
+	_text("%02d"%game.final_rank if win else "%d%%"%int(game.distance/game.track_length*100),Vector2(205,458),128,style.color,number_font)
 	if win: _text("/ %02d"%(game.rivals.size()+1),Vector2(390,456),35,MUTED,number_font)
 	_text("TOTAL SCORE",Vector2(578,322),18,MUTED,number_font)
 	_text("%06d"%Motion.count(game.score,t),Vector2(575,404),72,WHITE,number_font)
@@ -391,8 +476,10 @@ func _results() -> void:
 	_text("擦身  %02d"%game.near_misses,Vector2(1027,533),21,WHITE)
 	if busted:
 		_text("罚款 $%d  /  已扣 $%d  /  待缴 $%d"%[Motion.count(game.race_fine.gross,t,0.3,0.8),Motion.count(game.race_fine.paid,t,0.3,0.8),Motion.count(game.race_fine.unpaid,t,0.3,0.8)],Vector2(173,613),23,ORANGE)
-	else:
+	elif win:
 		_text("比赛奖金 $%d  /  抵扣欠款 $%d  /  实际入账 $%d"%[Motion.count(game.race_income.gross,t,0.4,1.0),Motion.count(game.race_income.debt_paid,t,0.4,1.0),Motion.count(game.race_income.net,t,0.4,1.0)],Vector2(173,613),22,CYAN)
+	else:
+		_text("未完成比赛 · 本场无奖金 / 无新增罚款",Vector2(173,613),23,style.color)
 	_text("钱包 $%d   ·   待缴罚款 $%d   ·   奖金用于购买新摩托"%[game.economy.cash,game.economy.debt],Vector2(173,652),18,MUTED)
 	_text("脱逃  %02d"%game.police.escapes,Vector2(1027,448),19,CYAN)
 	_text("夺取武器 %02d"%game.weapons_claimed,Vector2(969,390),16,CYAN)
@@ -406,7 +493,7 @@ func _results() -> void:
 	_button("garage","车库 / 换车",Rect2(863,687,300,65))
 	var km=Progress.measure(game.distance,game.track_length)
 	_text("本场里程 %.3f / %.3f km   ·   距终点 %.3f km   ·   完成 %.1f%%"%[km.travelled_km,km.total_km,km.remaining_km,km.percent],Vector2(173,790),18,CYAN)
-	_text("结算已保存 · 数字动效仅用于展示 · 随时可以重新开始",Vector2(173,834),15,MUTED)
+	_text(style.tip,Vector2(173,834),16,style.color)
 
 func _time(value: float) -> String:
 	return "%02d:%02d.%02d"%[int(value)/60,int(value)%60,int(fmod(value,1)*100)]
@@ -616,26 +703,34 @@ func _standings_board(interactive: bool) -> void:
 
 func _minimap() -> void:
 	var rect = Rect2(1175,330,232,277)
-	_panel(rect,Color(0.03,0.08,0.14,0.86),8,Color("334c5b"))
-	_text("赛道地图",rect.position+Vector2(15,25),16,WHITE)
+	var f=_pursuit_feedback()
+	var tint=Color(Feedback.RED,f.tint)
+	var background=Color(0.03,0.08,0.14,0.86).blend(tint)
+	_panel(rect,background,8,Color(Feedback.RED,0.4+f.pulse*0.4) if game.police.pursuit_active else Color("334c5b"))
+	if f.visible:
+		_status_icon(f.icon,rect.position+Vector2(25,22),12,f.color)
+		_text(f.title,rect.position+Vector2(47,28),16,f.color)
+	else: _text("赛道地图",rect.position+Vector2(15,25),16,WHITE)
 	_text(game.controls.label("toggle_map"),rect.position+Vector2(199,25),14,CYAN,number_font)
 	var points = PackedVector2Array()
 	for i in 100: points.append(_map_position(float(i)/99*game.track_length,0,rect))
 	draw_polyline(points,Color("294453"),8,true)
-	draw_polyline(points,Color("78959e"),2,true)
+	draw_polyline(points,Color("78959e").lerp(Feedback.RED,f.tint*3),2,true)
 	for r in game.rivals:
 		var pos = _map_position(r.distance,r.lane,rect)
 		draw_circle(pos,3.8,r.color.darkened(0.35) if r.node.recovery_time>0 else r.color)
 		if r.finished: draw_arc(pos,6,0,TAU,12,r.color,1,true)
 	for cop in game.police.units:
 		var dot=_map_position(cop.distance,cop.lane,rect)
-		draw_rect(Rect2(dot-Vector2(4,4),Vector2(8,8)),Color("90e6ca") if cop.retreat else (Color("ff5479") if fmod(game.total_time,0.4)<0.2 else Color("579cff")))
+		draw_rect(Rect2(dot-Vector2(4,4),Vector2(8,8)),Color("90e6ca") if cop.retreat else (Feedback.RED if f.pulse>=0.5 else Feedback.BLUE))
+		if not cop.retreat:
+			draw_arc(dot,7+f.pulse*3,0,TAU,20,Color(Feedback.RED,0.6),1.5,true)
 	var player_pos = _map_position(game.distance,game.lane,rect)
 	draw_circle(player_pos,7,INK)
 	draw_circle(player_pos,5,ORANGE)
 	_text("你",player_pos+Vector2(10,5),13,WHITE)
 	_text("FINISH",_map_position(game.track_length,0,rect)+Vector2(-24,-11),12,CYAN,number_font)
-	_text("橙点：你  /  彩点：对手",rect.position+Vector2(15,258),12,MUTED)
+	_text("方框：警车 / 橙点：你" if game.police.pursuit_active else "橙点：你  /  彩点：对手",rect.position+Vector2(15,258),12,MUTED)
 
 func _map_position(at: float, lane: float, rect: Rect2) -> Vector2:
 	var t = clampf(at/game.track_length,0,1)
@@ -709,7 +804,7 @@ func _garage() -> void:
 
 func _results_backdrop(t: float, success: bool) -> void:
 	if success:
-		var gold=Color("ffd487") if game.final_rank==1 else CYAN
+		var gold=Feedback.result(game.finish_reason,game.final_rank).color
 		for i in 3:
 			var radius=80+fmod(t*90+i*130,420)
 			draw_arc(Vector2(1300,130),radius,0,TAU,64,Color(gold,0.12*(1-radius/520)),2,true)
@@ -726,7 +821,7 @@ func _results_backdrop(t: float, success: bool) -> void:
 			for corner in [Vector2(-3,-7),Vector2(3,-7),Vector2(3,7),Vector2(-3,7)]: quad.append(center+corner.rotated(turn))
 			draw_colored_polygon(quad,col)
 	else:
-		var red=Color("ff637f")
+		var red=Feedback.result(game.finish_reason,game.final_rank).color
 		var sweep=fmod(t*150,1700)-140
 		for i in 8:
 			var x=sweep+i*14

@@ -4,6 +4,12 @@ var rider_hit_count = 0
 var engine: AudioStreamPlayer
 var airflow: AudioStreamPlayer
 var siren: AudioStreamPlayer
+var siren_yelp: AudioStreamPlayer
+var police_filter: AudioEffectLowPassFilter
+var police_panner: AudioEffectPanner
+var siren_urgency = 0.0
+var siren_pan = 0.0
+var countdown_cues: Array[String] = []
 var crowd: AudioStreamPlayer
 var music: AudioStreamPlayer
 var sounds: Dictionary = {}
@@ -18,7 +24,7 @@ var siren_pitch = 1.0
 func _ready() -> void:
 	AudioServer.set_bus_layout(load("res://assets/default_bus_layout.tres"))
 	if DisplayServer.get_name()=="headless": return
-	for key in ["hit","crash","swing","nitro","click","count","go","pickup","finish","defeat","landing","pain0","pain1","pain2","whip"]:
+	for key in ["hit","crash","swing","nitro","click","count","go","pickup","finish","defeat","landing","pain0","pain1","pain2","whip","busted"]:
 		sounds[key] = load("res://assets/audio/"+key+".wav")
 	for i in 12:
 		var p = AudioStreamPlayer.new()
@@ -27,7 +33,18 @@ func _ready() -> void:
 		voices.append(p)
 	engine = _loop("engine","SFX",-20)
 	music = _loop("music","Music",-7)
-	siren = _loop("siren","SFX",-80)
+	# A dedicated bus keeps distance coloration/panning out of combat and engine audio.
+	AudioServer.add_bus()
+	var bus=AudioServer.bus_count-1
+	AudioServer.set_bus_name(bus,"Police")
+	AudioServer.set_bus_send(bus,"SFX")
+	police_filter=AudioEffectLowPassFilter.new()
+	police_filter.cutoff_hz=6000
+	AudioServer.add_bus_effect(bus,police_filter)
+	police_panner=AudioEffectPanner.new()
+	AudioServer.add_bus_effect(bus,police_panner)
+	siren = _loop("siren","Police",-80)
+	siren_yelp = _loop("siren_yelp","Police",-80)
 	crowd = _loop("crowd","SFX",-80)
 	airflow = _loop("airflow","SFX",-80)
 
@@ -45,6 +62,7 @@ func _loop(key: String, bus_name: String, volume: float) -> AudioStreamPlayer:
 	return p
 
 func sfx(key: String, volume: float = 0.0, pitch: float = 1.0) -> void:
+	if key in ["count","go"]: countdown_cues.append(key)
 	if DisplayServer.get_name()=="headless": return
 	if not sounds.has(key): return
 	var p = voices[voice_index%voices.size()]
@@ -64,7 +82,7 @@ func update_audio(dt: float, speed: float, boost: bool, racing: bool) -> void:
 	AudioServer.set_bus_volume_db(0,linear_to_db(maxf(0.001,master_volume))-4.0)
 
 func shutdown() -> void:
-	for p in [siren,crowd,airflow]:
+	for p in [siren,siren_yelp,crowd,airflow]:
 		if p:
 			p.stop()
 			p.stream=null
@@ -82,13 +100,19 @@ func shutdown() -> void:
 func _exit_tree() -> void:
 	shutdown()
 
-func update_world_audio(remaining: float, pursuit: float, racing: bool, dt: float = 0.016667, pitch: float = 1.0) -> void:
+func update_world_audio(remaining: float, pursuit: float, racing: bool, dt: float = 0.016667, pitch: float = 1.0, urgency: float = 0.0, pan: float = 0.0) -> void:
 	var smoothing=1-exp(-dt*8)
 	siren_gain=lerpf(siren_gain,clampf(pursuit,0,1) if racing else 0.0,smoothing)
 	siren_pitch=lerpf(siren_pitch,clampf(pitch,0.78,1.28) if racing else 1.0,smoothing)
+	siren_urgency=lerpf(siren_urgency,clampf(urgency,0,1) if racing else 0.0,1-exp(-dt*3))
+	siren_pan=lerpf(siren_pan,clampf(pan,-0.8,0.8),smoothing)
 	if not siren: return
-	siren.volume_db=linear_to_db(maxf(0.0001,siren_gain*0.6))
+	siren.volume_db=linear_to_db(maxf(0.0001,siren_gain*0.6*sqrt(1-siren_urgency*0.85)))
 	siren.pitch_scale=siren_pitch
+	siren_yelp.volume_db=linear_to_db(maxf(0.0001,siren_gain*0.6*sqrt(siren_urgency*0.85)))
+	siren_yelp.pitch_scale=siren_pitch
+	police_filter.cutoff_hz=lerpf(1350,6200,sqrt(siren_gain))
+	police_panner.pan=siren_pan
 	crowd.volume_db=linear_to_db(maxf(0.0001,(1-clampf(absf(remaining)/300,0,1))*0.75)) if racing else -80
 
 func update_air_audio(dt: float, speed: float, airborne: bool) -> void:
