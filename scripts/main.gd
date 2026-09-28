@@ -16,6 +16,7 @@ var loadout = Loadout.new()
 var weapons_claimed = 0
 var weapon_notice = 0.0
 const RidePhysics = preload("res://scripts/ride_physics.gd")
+const PickupVisual = preload("res://scripts/pickup_visual.gd")
 const TrafficData = preload("res://scripts/traffic_data.gd")
 var ride = RidePhysics.new()
 const AerialStunt = preload("res://scripts/aerial_stunt.gd")
@@ -76,6 +77,8 @@ var flash = 0.0
 var damage_flash = 0.0
 var traffic_timer = 0.0
 var pickup_timer = 0.0
+var pickup_sequence = 0
+var race_cash = 0
 var boost_visual = 0.0
 var message = ""
 var message_sub = ""
@@ -347,6 +350,8 @@ func start_race() -> void:
 	player.attack_time = 0
 	traffic_timer = 1.2
 	pickup_timer = 1
+	pickup_sequence=0
+	race_cash=0
 	boost_visual=0
 	message_time = 0
 	finish_reason = ""
@@ -496,7 +501,9 @@ func _simulate(dt: float) -> void:
 		_spawn_traffic(distance+rng.randf_range(210,290),[-6.75,-2.25,2.25,6.75][rng.randi_range(0,3)])
 	if pickup_timer<=0:
 		pickup_timer = 3.1
-		_spawn_pickup(distance+190,[-6.75,-2.25,2.25,6.75][rng.randi_range(0,3)],"repair" if health<65 else "nitro")
+		pickup_sequence+=1
+		var kind="coin" if pickup_sequence%3==0 else ("repair" if health<65 else "nitro")
+		_spawn_pickup(distance+190,[-6.75,-2.25,2.25,6.75][rng.randi_range(0,3)],kind)
 	if health<=0: finish_race("wrecked")
 	elif distance>=track_length and player.recovery_time<=0: finish_race("finished")
 
@@ -700,17 +707,21 @@ func _simulate_pickups(dt: float) -> void:
 	for i in range(pickups.size()-1,-1,-1):
 		var p = pickups[i]
 		var z = p.distance-distance
-		p.node.rotation.y += dt*2
 		if z<2.5 and z>-speed*dt-2.5 and ride.height<1.9 and absf(p.lane-lane)<1.35 and player.recovery_time<=0:
 			if p.kind == "repair":
 				health = minf(100,health+25)
 				announce("装甲修复", "+25 车体耐久",Color("bff58f"),1.2)
+			elif p.kind == "coin":
+				var receipt=economy.collect_cash(100)
+				race_cash+=receipt.gross
+				announce("金币奖励", "+$%d 入账 · 抵扣罚款 $%d"%[receipt.net,receipt.debt_paid],PickupVisual.color("coin"),1.2)
+				_save()
 			else:
 				nitro = minf(100,nitro+35)
 				score += 50
 				announce("氮气补给", "+35 氮气  /  +50 分",Color("9cecf4"),1.2)
 			sound.sfx("pickup",-6)
-			fx.burst(p.node.position,Color("8fe5e9"))
+			fx.burst(p.node.position,PickupVisual.color(p.kind))
 			p.node.queue_free()
 			pickups.remove_at(i)
 		elif z < -20:
@@ -737,25 +748,7 @@ func _spawn_pickup(at: float, x: float, kind: String) -> void:
 	x=clampf(x,-world.road_half_width(at)+1.1,world.road_half_width(at)-1.1)
 	for car in traffic:
 		if absf(car.distance-at)<15 and absf(car.lane-x)<2: return
-	var n = Node3D.new()
-	var color = Color("9fe579") if kind == "repair" else Color("62def2")
-	var material = Geo.mat(color,0.3,0.25,2.5)
-	var torus = TorusMesh.new()
-	torus.inner_radius = 0.46
-	torus.outer_radius = 0.56
-	torus.rings = 16
-	torus.ring_segments = 8
-	var mi = MeshInstance3D.new()
-	mi.mesh = torus
-	mi.material_override = material
-	mi.rotation.x = PI/2
-	n.add_child(mi)
-	if kind == "repair":
-		Geo.box(n,Vector3(0.52,0.13,0.13),Vector3.ZERO,material)
-		Geo.box(n,Vector3(0.13,0.52,0.13),Vector3.ZERO,material)
-	else:
-		var bolt = Geo.box(n,Vector3(0.15,0.57,0.15),Vector3.ZERO,material)
-		bolt.rotation.z = -0.4
+	var n = PickupVisual.build(kind)
 	add_child(n)
 	pickups.append({"node":n,"distance":at,"lane":x,"kind":kind})
 
@@ -880,6 +873,10 @@ func _update_entities() -> void:
 		car.node.rotation.x=atan(world.slope_at(car.distance))
 	for p in pickups:
 		p.node.position = world.relative_position(p.lane,p.distance,distance)+Vector3(0,1.15+sin(total_time*3)*0.13,0)
+		# Always show the readable front instead of spinning into a thin edge.
+		var to_camera=camera.position-p.node.position
+		p.node.rotation.y=atan2(to_camera.x,to_camera.z)
+		p.node.get_node("Legend").visible=absf(p.distance-distance)<135
 
 func _update_camera(dt: float) -> void:
 	var menu_view = menu_backdrop()

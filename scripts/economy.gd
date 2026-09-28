@@ -22,6 +22,7 @@ var owned: Array[String] = ["rr09"]
 var equipped = "rr09"
 var total_prizes = 0
 var total_fines = 0
+var total_pickups = 0
 
 func bike(id: String = "") -> Dictionary:
 	if id.is_empty(): id=equipped
@@ -35,7 +36,7 @@ func select(id: String) -> String:
 	if id in owned:
 		equipped=id
 		return "已换上 "+item.name
-	if debt>0: return "先完成比赛，用奖金结清待缴罚款"
+	if debt>0: return "先完成比赛，用奖金和金币结清待缴罚款"
 	if cash<item.price: return "余额不足，还差 $%d"%(item.price-cash)
 	cash-=item.price
 	owned.append(id)
@@ -56,6 +57,15 @@ func award(amount: int) -> Dictionary:
 	total_prizes+=amount
 	return {"gross":amount,"debt_paid":repayment,"net":amount-repayment}
 
+func collect_cash(amount: int) -> Dictionary:
+	# Pickup cash is spendable money, not race score or podium prize statistics.
+	amount=maxi(0,amount)
+	var repayment=mini(debt,amount)
+	debt-=repayment
+	cash+=amount-repayment
+	total_pickups+=amount
+	return {"gross":amount,"debt_paid":repayment,"net":amount-repayment}
+
 func fine(amount: int) -> Dictionary:
 	amount=maxi(0,amount)
 	var paid=mini(cash,amount)
@@ -65,7 +75,7 @@ func fine(amount: int) -> Dictionary:
 	return {"gross":amount,"paid":paid,"unpaid":amount-paid}
 
 func save_config(file: ConfigFile) -> void:
-	for key in ["cash","debt","owned","equipped","total_prizes","total_fines"]:
+	for key in ["cash","debt","owned","equipped","total_prizes","total_fines","total_pickups"]:
 		file.set_value("career",key,get(key))
 
 func load_config(file: ConfigFile) -> void:
@@ -73,6 +83,7 @@ func load_config(file: ConfigFile) -> void:
 	debt=clampi(int(file.get_value("career","debt",0)),0,100000000)
 	total_prizes=maxi(0,int(file.get_value("career","total_prizes",0)))
 	total_fines=maxi(0,int(file.get_value("career","total_fines",0)))
+	total_pickups=maxi(0,int(file.get_value("career","total_pickups",0)))
 	owned=["rr09"]
 	var saved=file.get_value("career","owned",[])
 	if saved is Array:

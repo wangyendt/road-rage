@@ -461,6 +461,7 @@ func _help() -> void:
 	_text("赢法",Vector2(185,704),22,ORANGE)
 	_text("开局只有拳脚；亲手击倒持械 AI，自动夺取并装备其武器。",Vector2(270,704),18,WHITE)
 	_text("切换不打断攻击收招；摔车保留库存，每局重新从拳脚开始。",Vector2(270,740),17,MUTED)
+	_text("补给：绿箱 +25 耐久 / 蓝瓶 +35 氮气 / 金币 $100；维修免费，被捕按难度罚 $500–1100。",Vector2(185,771),14,CYAN)
 	_button("back","准备好了",Rect2(180,791,275,57),true,"ESC")
 
 func _results() -> void:
@@ -499,6 +500,7 @@ func _results() -> void:
 		_text("未完成比赛 · 本场无奖金 / 无新增罚款",Vector2(173,613),23,style.color)
 	_text("钱包 $%d   ·   待缴罚款 $%d   ·   本场维修 $0（免费）"%[game.economy.cash,game.economy.debt],Vector2(173,652),18,MUTED)
 	_text("脱逃 %02d · 最远 %.0fm"%[game.police.escapes,game.best_jump],Vector2(969,448),16,CYAN)
+	_text("路上金币 $%d（已结算）"%game.race_cash,Vector2(969,419),16,ORANGE)
 	_text("夺取武器 %02d"%game.weapons_claimed,Vector2(969,390),16,CYAN)
 	_text("飞跃 %02d / 反弹 %02d / 特技 %02d"%[game.jumps,game.bounces,game.stunts],Vector2(969,353),16,CYAN)
 	# Controls keep stable hitboxes throughout the entrance animation.
