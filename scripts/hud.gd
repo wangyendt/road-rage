@@ -788,7 +788,7 @@ func _garage() -> void:
 		if i in [3,7]: draw_line(Vector2(x+218,300),Vector2(x+270,300),bike.color,7,true)
 		_text("极速 / 氮气  %d / %d km/h"%[bike.speed*3.6,bike.boost*3.6],Vector2(x+18,426),16,WHITE)
 		_text("加速 %d   操控 %.1f"%[bike.accel,bike.handling],Vector2(x+18,459),17,MUTED)
-		_text("受伤 %.0f%%  /  缓冲 %.0f"%[bike.armor*100,bike.get("suspension",22.0)],Vector2(x+18,488),16,MUTED)
+		_text("碰撞伤害 %.0f%% / 缓冲 %.0f"%[bike.armor*100,bike.get("suspension",22.0)],Vector2(x+18,488),16,MUTED)
 		_text("反弹系数 %.2f  /  空控 %.0f%%"%[bike.restitution,bike.air_control*100],Vector2(x+18,518),16,CYAN)
 		draw_rect(Rect2(x+18,531,268,4),Color("2a4056"))
 		draw_rect(Rect2(x+18,531,268*bike.restitution/0.8,4),bike.color)

@@ -23,7 +23,7 @@ static func result(reason: String, rank: int, cause: String = "") -> Dictionary:
 			if rank<=3: return {"title":"PODIUM FINISH","subtitle":"登上领奖台","badge":"TOP 3 / 领奖台","icon":"trophy","color":Color("7be3ff"),"tip":"领奖台完赛 · 善用氮气与脱逃窗口，向冠军发起挑战。"}
 			return {"title":"RACE COMPLETE","subtitle":"冲线完成 · 奖金到账","badge":"FINISH / 完赛","icon":"flag","color":GREEN,"tip":"完成全程 · 保住车况、减少摔车，下次争取更高名次。"}
 		"busted": return {"title":"BUSTED","subtitle":"被警方截停 · 本场退赛","badge":"POLICE / 被捕","icon":"cuffs","color":RED,"tip":"倒地时被警员抓获 · 在警车散热时拉开距离，保持 2.5 秒脱逃。"}
-		_: return {"title":"WRECKED","subtitle":"车况耗尽 · 本场退赛","badge":"DNF / 撞毁","icon":"wreck","color":Color("ffae65"),"tip":"最后受损："+(cause if not cause.is_empty() else "车况耗尽")+" · 注意避让车流，升级装甲与落地缓冲。"}
+		_: return {"title":"WRECKED","subtitle":"车况耗尽 · 本场退赛","badge":"DNF / 撞毁","icon":"wreck","color":Color("ffae65"),"tip":"最后受损："+(cause if not cause.is_empty() else "车况耗尽")+" · 注意避让车流，升级碰撞装甲。"}
 
 static func start_signal(remaining: float) -> Dictionary:
 	var count=clampi(ceili(remaining),0,4)

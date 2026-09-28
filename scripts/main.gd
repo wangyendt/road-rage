@@ -442,10 +442,10 @@ func _simulate(dt: float) -> void:
 		if landing.chain==0 and landing.time>0.3 and landing.peak>0.45:
 			jumps+=1
 			best_jump=maxf(best_jump,landing.distance)
-		var safe=active_bike.get("suspension",22.0)
-		# Only the dissipated fraction shocks the suspension; no extra bounce damage.
+		var comfort=active_bike.get("suspension",22.0)
+		# Terrain landings are stunts, never damage/crash events. Suspension tunes feedback only.
 		var absorbed=landing.impact*sqrt(1.0-ride.restitution*ride.restitution)
-		shake=maxf(shake,minf(0.75,absorbed/55.0))
+		shake=maxf(shake,minf(0.28,absorbed/maxf(30.0,comfort*3.0)))
 		sound.sfx("landing",-12+minf(landing.impact/6,7),1.0+minf(landing.chain,4)*0.1)
 		if landing.bounced and player.recovery_time<=0:
 			bounces+=1
@@ -453,13 +453,10 @@ func _simulate(dt: float) -> void:
 			rebound_chain=landing.chain+1
 			rebound_power=clampf(landing.outgoing/30.0,0.2,1)
 			fx.rebound(Vector3(lane,0.12,0),Color("ffbc66"),rebound_power)
-		if absorbed>safe and landing.chain==0:
-			take_damage(minf(30,(absorbed-safe)*1.35),"重落地")
-			announce("落地冲击","冲坡前减速，或换用高缓冲悬挂",Color("ffb275"),1.4)
-		elif landing.chain==0 and landing.time>0.3 and landing.peak>0.45:
+		if landing.chain==0 and landing.time>0.3 and landing.peak>0.45:
 			score+=150
 			nitro=minf(100,nitro+8)
-			if not landing.bounced: announce("稳稳落地","飞跃 %.0fm · +150 分"%landing.distance,Color("c6f2cb"),1.6)
+			if not landing.bounced: announce("稳稳落地","飞跃 %.0fm · +150 分 · 无车损"%landing.distance,Color("c6f2cb"),1.6)
 	for rival in rivals: _simulate_rival(rival,dt)
 	_simulate_traffic(dt)
 	_simulate_pickups(dt)
@@ -536,7 +533,6 @@ func _simulate_rival(r: Dictionary, dt: float) -> void:
 	r.distance += r.speed*dt
 	var landing=r.ride.step(world,previous_distance,r.distance,r.speed,dt)
 	if landing.landed: r.speed=landing.forward_speed
-	if landing.landed and landing.impact>29: r.stun=maxf(r.stun,0.8)
 	var old_lane = r.lane
 	if r.stun<=0: r.lane = move_toward(r.lane,r.target_lane,dt*d.handling*world.grip_at(r.distance)*(0.35 if r.ride.airborne else 1.0)*(0.65+r.profile.handling*0.45))
 	r.lane=clampf(r.lane,-world.road_half_width(r.distance)+0.65,world.road_half_width(r.distance)-0.65)
