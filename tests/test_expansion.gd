@@ -148,7 +148,7 @@ func run() -> void:
 		game._process(1.0/60)
 		for j in game.rivals.size():
 			var delta=game.rivals[j].distance-snapshots[j]
-			if delta<0 or delta>112.1/60: continuous=false
+			if delta<0 or delta>124.1/60: continuous=false
 		best_gap=minf(best_gap,max_gap())
 	Input.action_release("boost")
 	print("BALANCE triple_crash_gap=%.1f best_after_60s=%.1f rank=%d"%[crash_gap,best_gap,game.rank_now()])

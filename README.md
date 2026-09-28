@@ -1,4 +1,4 @@
-# ROAD RAGE · 极限狂飙 v4.1
+# ROAD RAGE · 极限狂飙 v4.2
 
 可从菜单玩到结算的 **3D 单机摩托竞速格斗游戏**。原创程序化模型、合成音效和电子配乐；Godot 4，面向 Apple Silicon Mac。
 
@@ -9,7 +9,16 @@
 - 本机目录：`/Users/wayne/Documents/work/code/game/road-rage`。
 - 构建目标 macOS 13+ / arm64；验证机器为 M1 Max、macOS 26.6、Godot 4.7.2。
 
-开始游戏后先选择场景、1–15 名 AI 和 1–5 级难度，再开始竞赛。
+开始游戏后先选择场景、短/中/长赛程、1–15 名 AI 和 1–5 级难度，再开始竞赛。
+
+## v4.2 传奇难度与长赛程
+
+- 赛前新增 **短程 ×1 / 中程 ×2 / 长程 ×4**，八图全部支持，最长 28.8 km。港湾高架为 5.4 / 10.8 / 21.6 km。
+- 里程变化实际延伸起伏地形与路况，终点线、观众、数轴、小地图和结算同步；不会在旧终点提前结束，也不是简单把剩余道路改平。
+- 第 5 档主动氮气超车、防守、满槽提速与末段冲刺；加强车流预判、近车制动、武器距离控制，领跑者不再大幅降速。氮气有消耗、恢复、冷却与打断。
+- 蓝色尾焰 / N₂ 标记可见 AI 加速，人物档案显示战术和发动次数。1–4 档基础数值保留，仍有有限双向追赶，不瞬移、不保送胜利。
+- 所选赛程保存，重开保留；短中长用时纪录独立，旧存档默认短程。最高档建议升级摩托并留氮气应对末段。
+- 完整数值、赛程表与自动驾驶对比见 `docs/CHALLENGE.md`。
 
 ## v4.1 武器与夺取
 
@@ -134,10 +143,10 @@ assets/                  原创音频、纹理、图标及许可
 ./tools/build_macos.sh
 # 满员最高难度自动驾驶，仅供回归验证，不写入个人成绩：
 /Applications/Godot.app/Contents/MacOS/Godot --path . -- \
-  --autoplay --ai=15 --level=5 --course=3 --quit-after=110
+  --autoplay --ai=15 --level=5 --course=3 --distance=long --quit-after=110
 ```
 
-测试脚本覆盖 319 项逻辑和真实渲染输入断言。详情见 `docs/QA.md`；策略说明见 `docs/DESIGN.md`。`--course=0..7` 对应上表顺序。
+测试脚本覆盖 371 项逻辑和真实渲染输入断言。详情见 `docs/QA.md`；策略说明见 `docs/DESIGN.md`。`--course=0..7` 对应上表顺序。
 
 构建需要已安装 Godot 与 Xcode 命令行工具，可用 `GODOT_BIN` 指定引擎。输出 `builds/Road Rage.app` 和 `builds/RoadRage-macOS-AppleSilicon.zip`。
 

@@ -145,7 +145,7 @@ func _menu() -> void:
 	_text("BEST  %06d" % game.best_score,Vector2(68,853),16,MUTED,number_font)
 	_text("离线单机  /  原创 3D 街机竞速",Vector2(263,853),14,MUTED)
 	_text(Data.COURSES[game.race_options.course].en,Vector2(1040,84),26,WHITE,title_font)
-	_text("%s · %.1f KM"%[Data.COURSES[game.race_options.course].name,Data.COURSES[game.race_options.course].length/1000],Vector2(1040,112),17,MUTED)
+	_text("%s · %.1f KM"%[Data.COURSES[game.race_options.course].name,Data.race_length(game.race_options.course,game.race_options.get("distance",0))/1000],Vector2(1040,112),17,MUTED)
 	draw_line(Vector2(1100,131),Vector2(1369,131),Color(0.7,0.85,0.9,0.3),1,true)
 	_text("UP TO 16 RIDERS",Vector2(1040,159),17,CYAN,number_font)
 	_text("1 FINISH LINE",Vector2(1234,159),17,WHITE,number_font)
@@ -278,7 +278,7 @@ func _draw_rival_markers() -> void:
 		var warning = r.windup>0
 		var color = ORANGE if warning else r.color
 		var ready = Weapons.reaches(game.loadout.current,r.lane-game.lane,gap,r.ride.y-game.ride.y)
-		_center(("瞄准你 !" if r.target_id==-1 else "交战中") if warning else r.name,screen,15,color,body_font if warning else number_font)
+		_center(("瞄准你 !" if r.target_id==-1 else "交战中") if warning else r.name+(" · N₂" if r.burst>0 else ""),screen,15,CYAN if r.burst>0 and not warning else color,body_font if warning else number_font)
 		if absf(gap)<24: _center(Weapons.data(r.loadout.current).name,screen+Vector2(0,29),12,MUTED)
 		for i in 2:
 			draw_rect(Rect2(screen+Vector2(-24+i*27,8),Vector2(21,4)),color if r.hp>i else Color("344757"))
@@ -426,7 +426,7 @@ func _setup() -> void:
 		_panel(rect,Color(0.045,0.10,0.16,0.94),8,course.color if game.race_options.course==i or focused else Color("314653"))
 		_text(course.en,rect.position+Vector2(20,38),27,course.color,title_font)
 		_text(course.name,rect.position+Vector2(20,72),23,WHITE)
-		_text("%.1f KM"%(course.length/1000),rect.position+Vector2(263,72),18,MUTED,number_font)
+		_text("%.1f KM"%(Data.race_length(i,game.race_options.get("distance",0))/1000),rect.position+Vector2(263,72),18,MUTED,number_font)
 		_paragraph(course.description,rect.position+Vector2(20,117),320,16,MUTED)
 		_text(course.subtitle,rect.position+Vector2(20,186),14,course.color)
 		if game.race_options.course==i: _text("已选",rect.position+Vector2(302,36),15,CYAN)
@@ -446,11 +446,12 @@ func _setup() -> void:
 	_button("courses_prev","← 上一页",Rect2(900,670,145,44))
 	_text("%d / %d"%[game.course_page+1,ceili(Data.COURSES.size()/4.0)],Vector2(1074,700),20,CYAN,number_font)
 	_button("courses_next","更多地图 →",Rect2(1180,670,184,44))
-	_text("动态竞争：不瞬移、不锁死名次。落后可追回，领先也要防守。",Vector2(76,697),18,MUTED)
+	for choice in 3:
+		_button("distance:%d"%choice,Data.DISTANCE_NAMES[choice]+" ×%d"%[1,2,4][choice],Rect2(72+choice*255,666,241,49),game.race_options.get("distance",0)==choice)
 	_button("race_begin","开始竞赛",Rect2(72,748,360,65),true,"GO  →")
 	_button("roster","查看车手",Rect2(456,748,260,65))
 	_button("back","返回",Rect2(740,748,210,65),false,"ESC")
-	_text("所选场景会同时切换真实赛道形状、路边模型、光照与比赛长度。",Vector2(76,862),15,MUTED)
+	_text("赛程同步终点、地形与纪录；最高难度建议升级摩托，留好氮气应对末段冲刺。",Vector2(76,862),15,MUTED)
 
 func _roster() -> void:
 	_shade(0.92)
@@ -498,7 +499,7 @@ func _profile() -> void:
 	if not game.rivals.is_empty() and p.id<game.rivals.size():
 		var r = game.rivals[p.id]
 		_text("本场：%d km/h  ·  氮气 %d%%  ·  摔车 %d 次  ·  有效攻击 %d 次"%[r.speed*3.6,r.nitro,r.crashes,r.attacks],Vector2(185,690),19,WHITE)
-		_text("状态："+(r.node.recovery_stage if r.node.recovery_time>0 else ("已冲线" if r.finished else "竞速中")),Vector2(185,726),18,p.color)
+		_text("状态："+(r.node.recovery_stage if r.node.recovery_time>0 else ("已冲线" if r.finished else ("氮气 / "+r.boost_reason if r.burst>0 else "竞速中")))+" · 氮气发动 %d 次"%r.boosts_used,Vector2(185,726),18,p.color)
 		var km=Progress.measure(r.distance,game.track_length)
 		_text("已行驶 %.3f km / 剩余 %.3f km / 完成 %.1f%% / 与你相差 %+d m"%[km.travelled_km,km.remaining_km,km.percent,roundi(r.distance-game.distance)],Vector2(185,755),17,CYAN)
 	_button("back","返回车手列表",Rect2(184,780,310,58),true,"ESC")
@@ -523,7 +524,7 @@ func _distance_header() -> void:
 	_text("%.3f KM"%km.travelled_km,Vector2(321,72),31,WHITE,number_font)
 	_text("距终点",Vector2(525,39),13,MUTED)
 	_text("%.3f KM"%km.remaining_km,Vector2(525,72),31,CYAN,number_font)
-	_text("全程 %.2f KM / LV.%d"%[km.total_km,game.active_level],Vector2(740,40),15,MUTED,number_font)
+	_text("%s %.2f KM / LV.%d"%[Data.DISTANCE_NAMES[game.active_distance],km.total_km,game.active_level],Vector2(740,40),15,MUTED,number_font)
 	_text("%.1f%%"%km.percent,Vector2(931,71),28,ORANGE,number_font)
 	var a=Vector2(322,86)
 	draw_line(a,a+Vector2(727,0),Color("304a59"),3,true)

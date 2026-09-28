@@ -30,5 +30,9 @@ grep -q 'TERRAIN_UI_TEST_RESULTS passed=16 failed=0' "$ROOT/builds/test-logs/ter
 grep -q 'WEAPON_TEST_RESULTS passed=42 failed=0' "$ROOT/builds/test-logs/weapons.log"
 "$GODOT" --path "$ROOT" --script tests/test_weapons_ui.gd 2>&1 | tee "$ROOT/builds/test-logs/weapons-ui.log"
 grep -q 'WEAPON_UI_TEST_RESULTS passed=15 failed=0' "$ROOT/builds/test-logs/weapons-ui.log"
+"$GODOT" --headless --path "$ROOT" --script tests/test_challenge.gd 2>&1 | tee "$ROOT/builds/test-logs/challenge.log"
+grep -q 'CHALLENGE_TEST_RESULTS passed=40 failed=0' "$ROOT/builds/test-logs/challenge.log"
+"$GODOT" --path "$ROOT" --script tests/test_challenge_ui.gd 2>&1 | tee "$ROOT/builds/test-logs/challenge-ui.log"
+grep -q 'CHALLENGE_UI_TEST_RESULTS passed=12 failed=0' "$ROOT/builds/test-logs/challenge-ui.log"
 if grep -E '^(SCRIPT ERROR:|ERROR:)'   "$ROOT/builds/test-logs/"*.log; then exit 1; fi
-printf '\nAll 319 assertions passed.\n'
+printf '\nAll 371 assertions passed.\n'

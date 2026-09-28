@@ -85,8 +85,9 @@ var screenshot_path = ""
 var quit_after = -1.0
 var quitting = false
 var controls = Controls.new()
-var race_options = {"course":0,"ai_count":7,"difficulty":3}
+var race_options = {"course":0,"ai_count":7,"difficulty":3,"distance":0}
 var active_level = 3
+var active_distance = 0
 var profiles: Array[Dictionary] = Data.riders()
 var menu_history: Array[String] = []
 var selected_profile = 0
@@ -287,8 +288,11 @@ func start_race() -> void:
 	finish_celebrated=false
 	menu_history.clear()
 	active_level = clampi(race_options.difficulty,1,5)
-	track_length = Data.COURSES[race_options.course].length
+	active_distance = Data.distance_index(race_options.get("distance",0))
+	race_options.distance = active_distance
+	track_length = Data.race_length(race_options.course,active_distance)
 	if world.course_index!=race_options.course: world.build(race_options.course)
+	world.set_race_length(track_length)
 	_apply_settings()
 	state = "countdown"
 	return_state = "menu"
@@ -340,7 +344,7 @@ func start_race() -> void:
 		var start_lane = [-6.75,-2.25,2.25,6.75][i%4]
 		var rival_ride=RidePhysics.new()
 		rival_ride.reset(world,9.0+int(i/4)*8.0)
-		rivals.append({"loadout":Loadout.new(profile.weapon),"ride":rival_ride,"id":i,"profile":profile,"node":bike,"name":profile.name,"color":profile.color,"distance":9.0+int(i/4)*8.0,"lane":start_lane,"speed":0.0,"cruise":Data.difficulty(active_level).pace,"hp":2,"stun":0.0,"cooldown":2.5+i*0.17,"windup":0.0,"phase":float(i)*1.5,"finished":false,"finish_time":0.0,"nitro":100.0,"burst":0.0,"burst_cd":4.0+i*0.6,"think":0.0,"target_lane":start_lane,"target_id":-2,"hit_cd":0.0,"crashes":0,"attacks":0})
+		rivals.append({"loadout":Loadout.new(profile.weapon),"ride":rival_ride,"id":i,"profile":profile,"node":bike,"name":profile.name,"color":profile.color,"distance":9.0+int(i/4)*8.0,"lane":start_lane,"speed":0.0,"cruise":Data.difficulty(active_level).pace,"hp":2,"stun":0.0,"cooldown":2.5+i*0.17,"windup":0.0,"phase":float(i)*1.5,"finished":false,"finish_time":0.0,"nitro":100.0,"burst":0.0,"boosts_used":0,"boost_reason":"","burst_cd":4.0+i*0.6,"think":0.0,"target_lane":start_lane,"target_id":-2,"hit_cd":0.0,"crashes":0,"attacks":0})
 	_spawn_traffic(155,-6.75)
 	_spawn_traffic(230,2.25)
 	_spawn_pickup(105,2.25,"nitro")
@@ -474,23 +478,35 @@ func _simulate_rival(r: Dictionary, dt: float) -> void:
 		return
 	r.think -= dt
 	var gap = r.distance-distance
+	var road_clear = _ai_boost_clear(r)
 	if r.think<=0:
 		r.think = d.reaction*0.34
 		r.target_lane = _choose_ai_lane(r,d)
-		var road_clear = true
-		for car in traffic:
-			if car.distance-r.distance>0 and car.distance-r.distance<25 and absf(car.lane-r.lane)<2.3: road_clear=false
-		if r.burst_cd<=0 and r.nitro>40 and r.stun<=0 and road_clear and (gap< -9 or track_length-r.distance<650) and rng.randf()<d.nitro:
-			r.burst = 1.0+d.nitro*1.7
-			r.burst_cd = 7.5+(1-r.profile.aggression)*4.0
-	var boosting = r.burst>0 and r.nitro>0 and r.stun<=0
-	if boosting:
-		r.burst -= dt
-		r.nitro = maxf(0,r.nitro-dt*26)
-	else: r.nitro = minf(100,r.nitro+dt*7.5)
+		var next_gap = INF
+		for other in rivals:
+			if other.id!=r.id and not other.finished and other.hp>0 and other.distance>r.distance:
+				next_gap=minf(next_gap,other.distance-r.distance)
+		if distance>r.distance: next_gap=minf(next_gap,distance-r.distance)
+		var reason=Director.boost_reason(active_level,gap,next_gap,track_length-r.distance,r.nitro,elapsed)
+		if r.burst<=0 and r.burst_cd<=0 and r.stun<=0 and road_clear and not reason.is_empty() and rng.randf()<d.nitro:
+			r.burst = 3.0 if active_level==5 else 1.0+d.nitro*1.7
+			r.burst_cd = (5.2 if active_level==5 else 7.5)+(1-r.profile.aggression)*4.0
+			r.boosts_used += 1
+			r.boost_reason = reason
+	# A blocked lane, hit or empty tank cancels the burst; it never resumes for free.
+	if not road_clear or r.stun>0 or r.nitro<=0: r.burst=0
+	var boosting = r.burst>0
+	r.burst=maxf(0,r.burst-dt)
+	if boosting: r.nitro = maxf(0,r.nitro-dt*26)
+	else: r.nitro = minf(100,r.nitro+dt*(10.5 if active_level==5 else 7.5))
 	var target = Director.target_speed(active_level,r.profile,r.distance-race_anchor,track_length-r.distance,boosting)
+	if active_level==5:
+		for car in traffic:
+			var ahead=car.distance-r.distance
+			if ahead>0 and ahead<car.get("length",4.1)*0.5+10+maxf(0,r.speed-car.speed)*0.45 and absf(car.lane-r.lane)<car.get("width",1.95)*0.5+0.7:
+				target=minf(target,maxf(20,car.speed-3))
 	if r.stun>0: target = minf(target,45)
-	r.speed = move_toward(r.speed,target,dt*(17+r.profile.pace*6))
+	r.speed = move_toward(r.speed,target,dt*((25.0 if active_level==5 else 17.0)+r.profile.pace*6))
 	r.distance += r.speed*dt
 	var landing=r.ride.step(world,previous_distance,r.distance,r.speed,dt)
 	if landing.landed and landing.impact>29: r.stun=maxf(r.stun,0.8)
@@ -527,10 +543,21 @@ func _simulate_rival(r: Dictionary, dt: float) -> void:
 		r.finished = true
 		r.finish_time = elapsed-maxf(0,r.distance-track_length)/maxf(r.speed,1)
 
+func _ai_boost_clear(r: Dictionary) -> bool:
+	if r.ride.airborne: return false
+	var width=minf(world.road_half_width(r.distance),world.road_half_width(r.distance+70))-0.8
+	if absf(r.lane)>width: return false
+	for car in traffic:
+		var ahead=car.distance-r.distance
+		var horizon=25.0 if active_level<5 else 18.0+maxf(0,r.speed-car.speed)*0.9+car.get("length",4.1)*0.5
+		if ahead> -car.get("length",4.1)*0.5 and ahead<horizon and absf(car.lane-r.lane)<car.get("width",1.95)*0.5+1.0: return false
+	return true
+
 func _choose_ai_lane(r: Dictionary, d: Dictionary) -> float:
 	var preferred = sin(elapsed*0.18+r.phase)*6.5
 	if absf(r.distance-distance)<15 and player.recovery_time<=0:
-		preferred = clampf(lane+(-2.3 if r.id%2==0 else 2.3),-7.9,7.9)
+		var spacing = clampf(Weapons.data(r.loadout.current).reach*0.8,2.2,4.3) if active_level==5 else 2.3
+		preferred = clampf(lane+(-spacing if r.id%2==0 else spacing),-7.9,7.9)
 		if active_level>=4 and player.attack_time>0 and r.stun<=0:
 			preferred = clampf(r.lane+(-2 if r.lane<lane else 2),-8,8)
 	var best = r.lane
@@ -540,6 +567,7 @@ func _choose_ai_lane(r: Dictionary, d: Dictionary) -> float:
 		var cost = absf(candidate-preferred)*0.35+absf(candidate-r.lane)*0.18
 		for car in traffic:
 			var ahead = car.distance-r.distance
+			if active_level==5: ahead+=(car.speed-r.speed)*0.55
 			if ahead> -4 and ahead<d.lookahead+maxf(0,r.speed-car.speed)*0.35:
 				cost += maxf(0,car.get("width",1.95)*0.5+1.6-absf(candidate-car.lane))*(6.0 if ahead<25 else 3.0)
 		for other in rivals:
@@ -833,7 +861,7 @@ func finish_race(reason: String) -> void:
 		race_income=economy.award(Economy.prize(final_rank,rivals.size()+1,active_level))
 		score += (rivals.size()+2-final_rank)*600+int(health)*10
 		if best_time<=0 or elapsed<best_time: best_time = elapsed
-		var record_key = "%s_%d"%[world.course.id,active_level]
+		var record_key = Data.record_key(world.course.id,active_level,active_distance)
 		var previous = float(records.get(record_key,0))
 		if previous<=0 or elapsed<previous: records[record_key]=elapsed
 		sound.sfx("finish",-1)
@@ -892,6 +920,9 @@ func ui_action(action: String) -> void:
 		if state!="garage" or not rivals.is_empty(): return
 		garage_message=economy.select(action.get_slice(":",1))
 		_apply_bike()
+	elif action.begins_with("distance:"):
+		if state!="setup": return
+		race_options.distance = Data.distance_index(int(action.get_slice(":",1)))
 	elif action.begins_with("course:"):
 		race_options.course = int(action.get_slice(":",1))
 		world.build(race_options.course)
@@ -956,13 +987,17 @@ func _load_save() -> void:
 	for key in settings:
 		settings[key] = file.get_value("settings",key,settings[key])
 	settings.volume = clampf(float(settings.volume),0,1)
-	race_options.course = clampi(int(file.get_value("race","course",0)),0,Data.COURSES.size()-1)
-	race_options.ai_count = clampi(int(file.get_value("race","ai_count",7)),1,15)
-	race_options.difficulty = clampi(int(file.get_value("race","difficulty",4 if settings.hard else 3)),1,5)
+	_load_race_config(file)
 	var saved_records = file.get_value("records","courses",{})
 	if saved_records is Dictionary: records=saved_records
 	controls.load_config(file)
 	economy.load_config(file)
+
+func _load_race_config(file: ConfigFile) -> void:
+	race_options.course = clampi(int(file.get_value("race","course",0)),0,Data.COURSES.size()-1)
+	race_options.ai_count = clampi(int(file.get_value("race","ai_count",7)),1,15)
+	race_options.difficulty = clampi(int(file.get_value("race","difficulty",4 if settings.hard else 3)),1,5)
+	race_options.distance = Data.distance_index(file.get_value("race","distance",0))
 
 func _save() -> void:
 	if test_mode: return
@@ -980,6 +1015,7 @@ func _save() -> void:
 func _parse_test_args() -> void:
 	var args = OS.get_cmdline_user_args()
 	for arg in args:
+		if arg.begins_with("--distance="): race_options.distance=maxi(0,Data.DISTANCE_IDS.find(arg.trim_prefix("--distance=")))
 		if arg.begins_with("--ai="): race_options.ai_count=clampi(int(arg.trim_prefix("--ai=")),1,15)
 		if arg.begins_with("--level="): race_options.difficulty=clampi(int(arg.trim_prefix("--level=")),1,5)
 		if arg.begins_with("--course="): race_options.course=clampi(int(arg.trim_prefix("--course=")),0,Data.COURSES.size()-1)
@@ -1002,7 +1038,7 @@ func _test_step(dt: float) -> void:
 		screenshot_at = -1
 		_capture.call_deferred()
 	if quit_after>0 and test_elapsed>quit_after:
-		print("SMOKE_RESULT ",JSON.stringify({"state":state,"distance":distance,"health":health,"hits":hits,"takedowns":takedowns,"traffic":traffic.size(),"fps":Engine.get_frames_per_second(),"score":score,"rank":final_rank,"reason":finish_reason,"prize":race_income.gross,"fine":race_fine.gross,"cash":economy.cash,"bike":active_bike.id,"escapes":police.escapes,"jumps":jumps,"best_jump":best_jump,"weapon":loadout.current,"weapons_claimed":weapons_claimed}))
+		print("SMOKE_RESULT ",JSON.stringify({"state":state,"distance":distance,"track_length":track_length,"distance_class":Data.DISTANCE_IDS[active_distance],"ai_boosts":rivals.reduce(func(total,r): return total+r.boosts_used,0),"health":health,"hits":hits,"takedowns":takedowns,"traffic":traffic.size(),"fps":Engine.get_frames_per_second(),"score":score,"rank":final_rank,"reason":finish_reason,"prize":race_income.gross,"fine":race_fine.gross,"cash":economy.cash,"bike":active_bike.id,"escapes":police.escapes,"jumps":jumps,"best_jump":best_jump,"weapon":loadout.current,"weapons_claimed":weapons_claimed}))
 		request_quit()
 
 func _capture() -> void:

@@ -35,7 +35,7 @@ func build(map_index: int = 0) -> void:
 	wind_rotors.clear()
 	spectators.clear()
 	course_index = clampi(map_index,0,Data.COURSES.size()-1)
-	course = Data.COURSES[course_index]
+	course = Data.COURSES[course_index].duplicate()
 	theme = course.get("theme",course_index)
 	rng.seed = 20260924+course_index*77
 	_environment()
@@ -71,6 +71,12 @@ func build(map_index: int = 0) -> void:
 	add_child(finish_gate)
 	_build_finish_festival()
 	update_track(0,course.length)
+
+func set_race_length(length: float) -> void:
+	# Terrain must continue beyond the old finish, not become a long flat extension.
+	course = course.duplicate()
+	course.length = maxf(1000.0,length)
+	for chunk in chunks: chunk.set_meta("segment",-999999)
 
 func _environment() -> void:
 	environment = Environment.new()

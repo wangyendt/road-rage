@@ -18,11 +18,11 @@ const LEVEL_DESCRIPTIONS = [
 	"会避让交通，偶尔使用氮气追赶。",
 	"会寻找尾流、打断玩家，并在长直道超车。",
 	"更快反应、更积极选线，频繁反击与战术氮气。",
-	"非线性强化：预判避让、佯攻走位、末段冲刺；失误会被抓住。"
+	"传奇竞速：主动氮气超车、防守与末段冲刺；领跑不再大幅让速。"
 ]
 static func difficulty(level: int) -> Dictionary:
 	var n = clampi(level,1,5)-1
-	return {"pace":[63.5,67.5,71.5,74.8,78.8][n],"reaction":[1.2,1.0,0.8,0.63,0.43][n],"attack_cd":[7.5,6.0,4.8,3.8,2.65][n],"lookahead":[16.0,22.0,29.0,37.0,48.0][n],"handling":[2.4,2.8,3.4,4.0,5.0][n],"nitro":[0.15,0.30,0.48,0.70,0.96][n],"damage":[0.78,0.90,1.0,1.10,1.22][n],"catchup":[24.0,26.0,28.0,31.0,34.0][n],"leader_drag":[22.0,21.0,20.0,19.0,18.0][n]}
+	return {"pace":[63.5,67.5,71.5,74.8,92.0][n],"reaction":[1.2,1.0,0.8,0.63,0.30][n],"attack_cd":[7.5,6.0,4.8,3.8,1.90][n],"lookahead":[16.0,22.0,29.0,37.0,70.0][n],"handling":[2.4,2.8,3.4,4.0,6.6][n],"nitro":[0.15,0.30,0.48,0.70,1.0][n],"damage":[0.78,0.90,1.0,1.10,1.28][n],"catchup":[24.0,26.0,28.0,31.0,38.0][n],"leader_drag":[22.0,21.0,20.0,19.0,7.0][n]}
 
 static func riders() -> Array[Dictionary]:
 	var rows = [
@@ -47,3 +47,14 @@ static func riders() -> Array[Dictionary]:
 		var r = rows[i]
 		out.append({"weapon":Weapons.ROSTER[i],"id":i,"name":r[0],"full_name":r[1],"city":r[2],"age":r[3],"style":r[4],"bike":r[5],"pace":r[6],"handling":r[7],"aggression":r[8],"color":Color(r[9]),"bio":r[10]})
 	return out
+
+# Old saves and callers without a distance choice retain their original short course.
+const DISTANCE_IDS = ["short", "medium", "long"]
+const DISTANCE_NAMES = ["短程", "中程", "长程"]
+static func distance_index(value: Variant) -> int:
+	return clampi(int(value),0,2) if value is int or value is float else 0
+static func race_length(course_index: int, distance_choice: int = 0) -> float:
+	return COURSES[clampi(course_index,0,COURSES.size()-1)].length * [1.0,2.0,4.0][distance_index(distance_choice)]
+static func record_key(course_id: String, level: int, distance_choice: int = 0) -> String:
+	# Keep historical short-course record keys intact.
+	return "%s_%d"%[course_id,level]+("" if distance_choice==0 else "_"+DISTANCE_IDS[distance_index(distance_choice)])
