@@ -50,5 +50,11 @@ grep -q 'STUNT_TEST_RESULTS passed=75 failed=0' "$ROOT/builds/test-logs/stunts.l
 grep -q 'STUNT_UI_TEST_RESULTS passed=20 failed=0' "$ROOT/builds/test-logs/stunts-ui.log"
 "$GODOT" --path "$ROOT" --script tests/test_visibility.gd 2>&1 | tee "$ROOT/builds/test-logs/visibility.log"
 grep -q 'VISIBILITY_TEST_RESULTS passed=28 failed=0' "$ROOT/builds/test-logs/visibility.log"
+"$GODOT" --headless --path "$ROOT" --script tests/probe_map_alignment.gd 2>&1 | tee "$ROOT/builds/test-logs/map-alignment.log"
+grep -q 'PASS UI map must use the same scale' "$ROOT/builds/test-logs/map-alignment.log"
+"$GODOT" --headless --path "$ROOT" --script tests/test_road_rules.gd 2>&1 | tee "$ROOT/builds/test-logs/road-rules.log"
+grep -q 'ROAD_RULES_TEST_RESULTS passed=52 failed=0' "$ROOT/builds/test-logs/road-rules.log"
+"$GODOT" --path "$ROOT" --script tests/test_road_rules_ui.gd 2>&1 | tee "$ROOT/builds/test-logs/road-rules-ui.log"
+grep -q 'ROAD_RULES_UI_TEST_RESULTS passed=14 failed=0' "$ROOT/builds/test-logs/road-rules-ui.log"
 if grep -E '^(SCRIPT ERROR:|ERROR:)'   "$ROOT/builds/test-logs/"*.log; then exit 1; fi
-printf '\nAll 642 assertions passed.\n'
+printf '\nAll 709 assertions passed.\n'
