@@ -191,7 +191,7 @@ func _menu() -> void:
 	_button("help","驾驶指南",Rect2(255,695,175,52))
 	_button("quit","退出游戏",Rect2(68,760,362,44),false,"QUIT")
 	_text("BEST  %06d" % game.best_score,Vector2(68,853),16,MUTED,number_font)
-	_text("离线单机  /  原创 3D 街机竞速",Vector2(263,853),14,MUTED)
+	_text("离线单机 / 原创 3D 街机竞速 · v"+str(ProjectSettings.get_setting("application/config/version")),Vector2(263,853),14,MUTED)
 	_text(Data.COURSES[game.race_options.course].en,Vector2(1040,84),26,WHITE,title_font)
 	_text("%s · %.1f KM"%[Data.COURSES[game.race_options.course].name,Data.race_length(game.race_options.course,game.race_options.get("distance",0))/1000],Vector2(1040,112),17,MUTED)
 	draw_line(Vector2(1100,131),Vector2(1369,131),Color(0.7,0.85,0.9,0.3),1,true)
