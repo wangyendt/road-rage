@@ -89,7 +89,10 @@ var last_damage_cause = ""
 var final_rank = 6
 var best_score = 0
 var best_time = 0.0
-var settings = {"volume":0.8,"music":true,"shake":true,"quality":true,"hard":false,"map":true,"mirror":true}
+var settings = {"volume":0.8,"music":true,"shake":true,"quality":true,"hard":false,"map":true,"mirror":true,"air_walls":true,"oncoming":false}
+var race_rules={"air_walls":true,"oncoming":false}
+var fall_velocity=0.0
+var fall_time=0.0
 var test_mode = false
 var auto_drive = false
 var test_elapsed = 0.0
@@ -204,7 +207,7 @@ func _input(event: InputEvent) -> void:
 		if key==KEY_ESCAPE:
 			back()
 			return
-		if state not in ["race","countdown"]:
+		if state not in ["race","countdown","falling"]:
 			if event.is_action_pressed("pause_game") and state=="paused": back()
 			elif key in [KEY_ENTER,KEY_SPACE]: hud.activate_selected()
 			elif key in [KEY_UP,KEY_W]: hud.move_selection(-1)
@@ -214,7 +217,7 @@ func _input(event: InputEvent) -> void:
 	if (event is InputEventKey and event.echo): return
 	if event.is_action_pressed("pause_game"):
 		back()
-	elif state in ["race","countdown"]:
+	elif state in ["race","countdown","falling"]:
 		if event.is_action_pressed("show_roster"): open_page("roster")
 		elif event.is_action_pressed("toggle_map"):
 			settings.map = not settings.map
@@ -237,7 +240,7 @@ func _input(event: InputEvent) -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
 		request_quit()
-	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and state in ["race","countdown"] and not test_mode:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and state in ["race","countdown","falling"] and not test_mode:
 		resume_state = state
 		state = "paused"
 		if hud: hud.selected = 0
@@ -271,16 +274,18 @@ func _process(raw_dt: float) -> void:
 			state = "race"
 			sound.sfx("go")
 			announce("全速出击", "自动油门 · %s / %s 左右攻击"%[controls.label("attack_left"),controls.label("attack_right")],Color("acf2ed"),2.5)
+	elif state=="falling":
+		_simulate_fall(dt)
 	elif racing:
 		var sim_dt = dt
 		if hitstop > 0:
 			hitstop -= dt
 			sim_dt *= 0.12
 		_simulate(sim_dt)
-	if state in ["race","countdown","finished"]:
+	if state in ["race","countdown","falling","finished"]:
 		world.update_track(distance,track_length,total_time,ride.height)
 		_update_entities()
-	if state in ["race","countdown","finished"] or menu_backdrop():
+	if state in ["race","countdown","falling","finished"] or menu_backdrop():
 		_update_camera(dt)
 		shake = move_toward(shake,0,dt*2.5)
 		flash = move_toward(flash,0,dt*8)
@@ -296,6 +301,9 @@ func _process(raw_dt: float) -> void:
 
 func start_race() -> void:
 	_clear_race()
+	race_rules={"air_walls":bool(settings.air_walls),"oncoming":bool(settings.oncoming)}
+	fall_time=0
+	fall_velocity=0
 	loadout=Loadout.new()
 	weapons_claimed=0
 	weapon_notice=0
@@ -310,6 +318,7 @@ func start_race() -> void:
 	track_length = Data.race_length(race_options.course,active_distance)
 	if world.course_index!=race_options.course: world.build(race_options.course)
 	world.set_race_length(track_length)
+	world.configure_rules(race_rules.air_walls,race_rules.oncoming)
 	_apply_settings()
 	state = "countdown"
 	return_state = "menu"
@@ -325,7 +334,7 @@ func start_race() -> void:
 	rebound_timer=0
 	rebound_chain=0
 	best_jump=0
-	lane = 0
+	lane = 2.25 if race_rules.oncoming else 0
 	speed = 0
 	health = 100
 	nitro = 100
@@ -370,11 +379,11 @@ func start_race() -> void:
 		add_child(bike)
 		bike.build(profile.color,false,i%Economy.BIKES.size())
 		bike.set_weapon(profile.weapon)
-		var start_lane = [-6.75,-2.25,2.25,6.75][i%4]
+		var start_lane = [2.25,6.75][i%2] if race_rules.oncoming else [-6.75,-2.25,2.25,6.75][i%4]
 		var rival_ride=RidePhysics.new()
 		rival_ride.configure(Economy.BIKES[i%Economy.BIKES.size()])
-		rival_ride.reset(world,9.0+int(i/4)*8.0)
-		rivals.append({"loadout":Loadout.new(profile.weapon),"ride":rival_ride,"id":i,"profile":profile,"node":bike,"name":profile.name,"color":profile.color,"distance":9.0+int(i/4)*8.0,"lane":start_lane,"speed":0.0,"cruise":Data.difficulty(active_level).pace,"hp":2,"stun":0.0,"cooldown":2.5+i*0.17,"windup":0.0,"phase":float(i)*1.5,"finished":false,"finish_time":0.0,"nitro":100.0,"burst":0.0,"boosts_used":0,"boost_reason":"","burst_cd":4.0+i*0.6,"think":0.0,"target_lane":start_lane,"target_id":-2,"hit_cd":0.0,"crashes":0,"attacks":0})
+		rival_ride.reset(world,9.0+int(i/(2 if race_rules.oncoming else 4))*8.0)
+		rivals.append({"loadout":Loadout.new(profile.weapon),"ride":rival_ride,"id":i,"profile":profile,"node":bike,"name":profile.name,"color":profile.color,"distance":9.0+int(i/(2 if race_rules.oncoming else 4))*8.0,"lane":start_lane,"speed":0.0,"cruise":Data.difficulty(active_level).pace,"hp":2,"stun":0.0,"cooldown":2.5+i*0.17,"windup":0.0,"phase":float(i)*1.5,"finished":false,"finish_time":0.0,"nitro":100.0,"burst":0.0,"boosts_used":0,"boost_reason":"","burst_cd":4.0+i*0.6,"think":0.0,"target_lane":start_lane,"target_id":-2,"hit_cd":0.0,"crashes":0,"attacks":0})
 	_spawn_traffic(155,-6.75)
 	_spawn_traffic(230,2.25)
 	_spawn_pickup(105,2.25,"nitro")
@@ -394,6 +403,7 @@ func _clear_race() -> void:
 func _simulate(dt: float) -> void:
 	if not Input.is_action_pressed("boost") and not auto_drive: boost_lock=false
 	var previous_distance=distance
+	var previous_lane=lane
 	weapon_notice=maxf(0,weapon_notice-dt)
 	stunt_notice=maxf(0,stunt_notice-dt)
 	elapsed += dt
@@ -438,21 +448,35 @@ func _simulate(dt: float) -> void:
 			if not was_boost: sound.sfx("nitro",-5)
 		else: nitro = minf(100,nitro+dt*(8+catchup_help*0.8))
 		var target = (active_bike.boost if boost_active else active_bike.speed)+catchup_help
+		if wrong_way(): target*=1.08
 		if brake: target = 24
 		var limit=world.road_half_width(distance)-0.5
 		var grip=minf(1.0,world.grip_at(distance)*active_bike.get("grip",1.0))
-		if absf(lane)>limit-0.2: target = 40
-		speed = move_toward(speed,target,dt*(42*grip if brake else active_bike.accel+catchup_help))
+		if race_rules.air_walls and absf(lane)>limit-0.2: target = 40
+		elif not race_rules.air_walls and absf(lane)>world.road_half_width(distance) and ride.height<1.0:
+			target=minf(target,38.0 if world.theme==1 else 45.0)
+			grip*=0.62
+		speed = move_toward(speed,target,dt*(42*grip if brake or (not race_rules.air_walls and absf(lane)>world.road_half_width(distance) and speed>target) else active_bike.accel+catchup_help))
 		steer = lerpf(steer,input_steer,1-exp(-dt*9*grip))
 		lane += steer*dt*(active_bike.handling*grip*(active_bike.get("air_control",0.35) if ride.airborne else 1.0)*(1.12 if boost_active else 1.0))
 		lane += sin(distance*0.0039)*speed*dt*0.0025
-		if absf(lane)>limit:
+		if race_rules.air_walls and absf(lane)>limit:
 			lane = clampf(lane,-limit-0.1,limit+0.1)
 			if speed>35 and ride.height<1.0: take_damage(8,"擦碰护栏")
 		distance += speed*dt
 		player.position = Vector3(lane,0,0)
 		player.rotation.y = -steer*0.09
 		player.animate(dt,speed,steer,boost_active,total_time)
+	if not race_rules.air_walls:
+		if world.over_sea(lane,distance) and ride.y+ride.velocity*dt-0.5*RidePhysics.GRAVITY*dt*dt<=world.height_at(distance)+0.4:
+			_begin_fall()
+			return
+		var wall=world.roadside_hit(previous_lane,previous_distance,lane,distance,ride.height)
+		if not wall.is_empty():
+			lane=wall.lane
+			if damage_cooldown<=0 and player.recovery_time<=0:
+				take_damage(28,wall.cause)
+				speed*=0.4
 	var contact_event=ride.step(world,previous_distance,distance,speed,dt,player.recovery_time>0)
 	if contact_event.landed: speed=contact_event.forward_speed
 	for landing in contact_event.contacts:
@@ -487,7 +511,7 @@ func _simulate(dt: float) -> void:
 		stunt.step(dt,AerialStunt.contact_eta(world,distance,speed,ride.y,ride.velocity))
 	player.pose_stunt(stunt.extension,stunt.active)
 	for rival in rivals: _simulate_rival(rival,dt)
-	_simulate_traffic(dt)
+	_simulate_traffic(dt,previous_distance)
 	_simulate_pickups(dt)
 	police.update(dt)
 	if state!="race": return
@@ -506,6 +530,39 @@ func _simulate(dt: float) -> void:
 		_spawn_pickup(distance+190,[-6.75,-2.25,2.25,6.75][rng.randi_range(0,3)],kind)
 	if health<=0: finish_race("wrecked")
 	elif distance>=track_length and player.recovery_time<=0: finish_race("finished")
+
+func wrong_way() -> bool:
+	return state=="race" and race_rules.oncoming and lane< -0.9 and absf(lane)<world.road_half_width(distance)-0.4 and ride.height<1.0 and player.recovery_time<=0
+
+func _clamp_player_lane(value: float) -> float:
+	var limit=world.road_half_width(distance)-0.4
+	return clampf(value,-limit,limit) if race_rules.air_walls else value
+
+func _begin_fall() -> void:
+	_cancel_stunt()
+	state="falling"
+	fall_velocity=minf(ride.velocity,0)
+	fall_time=0
+	boost_active=false
+	message_time=0
+	rebound_timer=0
+	# Preserve world altitude; sea level is fixed at -18 m.
+	ride.height=ride.y-world.height_at(distance)
+
+func _simulate_fall(dt: float) -> void:
+	elapsed+=dt
+	fall_time+=dt
+	distance+=speed*dt
+	speed=move_toward(speed,0,dt*18)
+	fall_velocity-=RidePhysics.GRAVITY*dt
+	ride.y+=fall_velocity*dt
+	ride.height=ride.y-world.height_at(distance)
+	player.rotation.z=sin(fall_time*3)*0.25
+	if ride.y<= -18:
+		ride.y=-18
+		ride.height=-18-world.height_at(distance)
+		fx.burst(Vector3(lane,ride.height+0.2,0),Color("93edff"),true)
+		finish_race("sea")
 
 func _simulate_rival(r: Dictionary, dt: float) -> void:
 	var previous_distance: float=r.distance
@@ -570,7 +627,7 @@ func _simulate_rival(r: Dictionary, dt: float) -> void:
 	var lean = clampf((r.lane-old_lane)/maxf(dt*4,0.001),-1,1)
 	r.node.animate(dt,r.speed,lean,boosting,total_time+r.phase)
 	for car in traffic:
-		if absf(car.distance-r.distance)<car.get("length",4.1)*0.5+1.05 and absf(car.lane-r.lane)<car.get("width",1.95)*0.5+0.45 and r.ride.y<world.height_at(car.distance)+car.get("height",1.75) and r.hit_cd<=0:
+		if minf(car.distance-previous_distance,car.distance+car.speed*dt-r.distance)<car.get("length",4.1)*0.5+1.05 and maxf(car.distance-previous_distance,car.distance+car.speed*dt-r.distance)>-car.get("length",4.1)*0.5-1.05 and absf(car.lane-r.lane)<car.get("width",1.95)*0.5+0.45 and r.ride.y<world.height_at(car.distance)+car.get("height",1.75) and r.hit_cd<=0:
 			_crash_rival(r,1 if r.lane>car.lane else -1)
 			return
 	if r.windup>0:
@@ -591,7 +648,7 @@ func _simulate_rival(r: Dictionary, dt: float) -> void:
 	if absf(r.ride.y-ride.y)<1.25 and absf(r.distance-distance)<1.8 and absf(r.lane-lane)<0.80 and r.stun<=0 and player.recovery_time<=0:
 		var bump_side = -1.0 if r.lane>lane else 1.0
 		take_damage(6,"车手擦碰")
-		lane = clampf(lane+bump_side*dt*3,-8.9,8.9)
+		lane = _clamp_player_lane(lane+bump_side*dt*3)
 		r.lane = clampf(r.lane-bump_side*dt*3,-8.9,8.9)
 	if r.distance>=track_length:
 		r.finished = true
@@ -617,6 +674,7 @@ func _choose_ai_lane(r: Dictionary, d: Dictionary) -> float:
 	var best = r.lane
 	var best_cost = INF
 	for candidate in [-7.1,-4.5,-2.3,0.0,2.3,4.5,7.1,preferred]:
+		if race_rules.oncoming and candidate<0.9: continue
 		if absf(candidate)>minf(world.road_half_width(r.distance),world.road_half_width(r.distance+d.lookahead))-0.85: continue
 		var cost = absf(candidate-preferred)*0.35+absf(candidate-r.lane)*0.18
 		for car in traffic:
@@ -643,7 +701,7 @@ func _resolve_ai_attack(r: Dictionary) -> void:
 			take_damage(w.rider_damage,"%s · %s"%[r.name,w.name])
 			if health<previous_health:
 				var side=1.0 if lane>r.lane else -1.0
-				lane=clampf(lane+side*w.shove*0.4,-8.5,8.5)
+				lane=_clamp_player_lane(lane+side*w.shove*0.4)
 				player.react_to_hit(side)
 				r.attacks += 1
 	elif r.target_id>=0 and r.target_id<rivals.size():
@@ -674,10 +732,11 @@ func _crash_rival(r: Dictionary, side: float) -> void:
 	r.node.begin_crash(side)
 	if absf(r.distance-distance)<90: fx.burst(r.node.position+Vector3(0,0.8,0),Color("ffb865"),true)
 
-func _simulate_traffic(dt: float) -> void:
+func _simulate_traffic(dt: float, previous_player_distance: float = NAN) -> void:
+	if is_nan(previous_player_distance): previous_player_distance=distance-speed*dt
 	for i in range(traffic.size()-1,-1,-1):
 		var car = traffic[i]
-		var old_z = car.distance-distance+speed*dt
+		var old_z = car.distance-previous_player_distance
 		car.distance += car.speed*dt
 		var edge=world.road_half_width(car.distance+20)-car.get("width",1.95)*0.5-0.4
 		car.lane=move_toward(car.lane,clampf(car.lane,-edge,edge),dt*3.0)
@@ -689,7 +748,7 @@ func _simulate_traffic(dt: float) -> void:
 		var dx = absf(car.lane-lane)
 		if crossing and vertical_hit and dx<hit_width and not car.collided and player.recovery_time<=0:
 			car.collided = true
-			take_damage(23,"撞上车辆")
+			take_damage(36 if car.get("oncoming",false) else 23,"迎面撞车" if car.get("oncoming",false) else "撞上车辆")
 			speed *= 0.59
 			lane += -0.75 if lane<car.lane else 0.75
 		if z < -extent-1.0 and not car.passed:
@@ -742,7 +801,7 @@ func _spawn_traffic(at: float, x: float, model: String = "") -> void:
 	x=clampf(x,-edge,edge)
 	var n = world.traffic_vehicle(spec,colors[rng.randi_range(0,colors.size()-1)])
 	add_child(n)
-	traffic.append({"node":n,"distance":at,"lane":x,"speed":spec.speed+rng.randf_range(-2,2),"model":spec.id,"width":spec.width,"length":spec.length,"height":spec.height,"passed":false,"collided":false})
+	traffic.append({"node":n,"distance":at,"lane":x,"speed":(spec.speed+rng.randf_range(-2,2))*(-1 if race_rules.oncoming and x<0 else 1),"oncoming":race_rules.oncoming and x<0,"model":spec.id,"width":spec.width,"length":spec.length,"height":spec.height,"passed":false,"collided":false})
 
 func _spawn_pickup(at: float, x: float, kind: String) -> void:
 	x=clampf(x,-world.road_half_width(at)+1.1,world.road_half_width(at)-1.1)
@@ -865,12 +924,12 @@ func _update_entities() -> void:
 		r.node.position = world.relative_position(r.lane,r.distance,distance)
 		r.node.position.y+=r.ride.height
 		r.node.rotation.x=r.ride.pitch
-		r.node.rotation.y = world.yaw_at(r.distance)*0.5
+		r.node.rotation.y = world.relative_yaw(r.distance,distance)
 		r.node.visible = absf(r.distance-distance)<600
 	for car in traffic:
 		car.node.position = world.relative_position(car.lane,car.distance,distance)
-		car.node.rotation.y = world.yaw_at(car.distance)
-		car.node.rotation.x=atan(world.slope_at(car.distance))
+		car.node.rotation.y = world.relative_yaw(car.distance,distance)+(PI if car.get("oncoming",false) else 0)
+		car.node.rotation.x=atan(world.slope_at(car.distance))*(-1 if car.get("oncoming",false) else 1)
 	for p in pickups:
 		p.node.position = world.relative_position(p.lane,p.distance,distance)+Vector3(0,1.15+sin(total_time*3)*0.13,0)
 		# Always show the readable front instead of spinning into a thin edge.
@@ -887,7 +946,7 @@ func _update_camera(dt: float) -> void:
 		look = Vector3(-2.2,1.25,-0.5)
 		camera.fov = lerpf(camera.fov,49,clampf(dt*4,0,1))
 	else:
-		target_pos = Vector3(lane*0.72,3.5 if not boost_active else 3.1,7.0 if not boost_active else 7.5)
+		target_pos = Vector3(lane*(0.72 if race_rules.air_walls else 1.0),3.5 if not boost_active else 3.1,7.0 if not boost_active else 7.5)
 		target_pos.y+=ride.height
 		target_pos.y=maxf(target_pos.y,world.height_at(distance-8)-world.height_at(distance)+2.8)
 		var road_ahead=world.height_at(distance+16)-world.height_at(distance)
@@ -896,7 +955,7 @@ func _update_camera(dt: float) -> void:
 		# Blend the reference targets, not the camera's world-space height.
 		# A hard switch at 15 m caused 4–6 degree cuts on ascent AND descent.
 		var flight_mix=smoothstep(5.0,35.0,ride.height)
-		look = Vector3(lane*0.7+steer*1.2,lerpf(ground_look,flight_look,flight_mix),-16)
+		look = Vector3(lane*(0.7 if race_rules.air_walls else 1.0)+steer*1.2+world.relative_position(0,distance+16,distance).x,lerpf(ground_look,flight_look,flight_mix),-16)
 		var high_clearance=maxf(0,ride.height-15)
 		target_pos.y+=minf(high_clearance*0.04,2.5)
 		target_pos.z+=minf(high_clearance*0.045,4.0)
@@ -923,7 +982,7 @@ func rank_now() -> int:
 	return mini(rivals.size()+1,rank)
 
 func finish_race(reason: String) -> void:
-	if state != "race": return
+	if state not in ["race","falling"]: return
 	_cancel_stunt()
 	final_rank = rank_now()
 	finish_reason = reason
@@ -956,7 +1015,7 @@ func announce(title: String, sub: String, color: Color, duration: float) -> void
 func back() -> void:
 	if not rebinding.is_empty():
 		rebinding = ""
-	elif state in ["race","countdown"]:
+	elif state in ["race","countdown","falling"]:
 		resume_state = state
 		return_state = state
 		state = "paused"
@@ -967,7 +1026,7 @@ func back() -> void:
 	hud.selected = 0
 
 func open_page(page: String) -> void:
-	if state in ["race","countdown"]:
+	if state in ["race","countdown","falling"]:
 		resume_state = state
 		menu_history.append("paused")
 		return_state = "paused"
@@ -976,7 +1035,7 @@ func open_page(page: String) -> void:
 	hud.selected = 0
 
 func menu_backdrop() -> bool:
-	return state not in ["race","countdown","paused","finished"] and "paused" not in menu_history and "finished" not in menu_history
+	return state not in ["race","countdown","falling","paused","finished"] and "paused" not in menu_history and "finished" not in menu_history
 
 func to_menu() -> void:
 	_clear_race()
@@ -1032,6 +1091,8 @@ func ui_action(action: String) -> void:
 			"quality": settings.quality = not settings.quality
 			"map": settings.map = not settings.map
 			"mirror": settings.mirror = not settings.mirror
+			"air_walls": settings.air_walls = not settings.air_walls
+			"oncoming": settings.oncoming = not settings.oncoming
 			"difficulty": race_options.difficulty = posmod(race_options.difficulty,5)+1
 			"reset_keys":
 				controls.keys = Controls.DEFAULTS.duplicate()
@@ -1048,6 +1109,7 @@ func _apply_settings() -> void:
 	Engine.max_fps = 120 if settings.quality else 60
 	sound.music_enabled = settings.music
 	sound.master_volume = settings.volume
+	if menu_backdrop(): world.configure_rules(bool(settings.air_walls),bool(settings.oncoming))
 	world.environment.glow_enabled = settings.quality
 	world.sun.shadow_enabled = settings.quality
 	get_viewport().msaa_3d = Viewport.MSAA_2X if settings.quality else Viewport.MSAA_DISABLED
@@ -1058,14 +1120,19 @@ func _load_save() -> void:
 	if file.load(SAVE_PATH) != OK: return
 	best_score = int(file.get_value("records","score",0))
 	best_time = float(file.get_value("records","time",0.0))
-	for key in settings:
-		settings[key] = file.get_value("settings",key,settings[key])
-	settings.volume = clampf(float(settings.volume),0,1)
+	_load_settings(file)
 	_load_race_config(file)
 	var saved_records = file.get_value("records","courses",{})
 	if saved_records is Dictionary: records=saved_records
 	controls.load_config(file)
 	economy.load_config(file)
+
+func _load_settings(file: ConfigFile) -> void:
+	for key in settings:
+		settings[key] = file.get_value("settings",key,settings[key])
+	settings.volume = clampf(float(settings.volume),0,1)
+	settings.air_walls=bool(settings.air_walls)
+	settings.oncoming=bool(settings.oncoming)
 
 func _load_race_config(file: ConfigFile) -> void:
 	race_options.course = clampi(int(file.get_value("race","course",0)),0,Data.COURSES.size()-1)
@@ -1157,11 +1224,11 @@ func _create_mirror() -> void:
 	mirror_camera.current = true
 
 func _update_mirror() -> void:
-	var active = settings.mirror and state in ["race","countdown"]
+	var active = settings.mirror and state in ["race","countdown","falling"]
 	mirror_view.render_target_update_mode = SubViewport.UPDATE_ALWAYS if active else SubViewport.UPDATE_DISABLED
 	if active:
 		mirror_camera.position = Vector3(lane,2.8+ride.height,1.8)
-		mirror_camera.look_at(Vector3(lane,1.2+world.height_at(distance-55)-world.height_at(distance),55))
+		mirror_camera.look_at(world.relative_position(lane,distance-55,distance)+Vector3(0,1.2,0))
 
 func standings() -> Array[Dictionary]:
 	var rows: Array[Dictionary] = []

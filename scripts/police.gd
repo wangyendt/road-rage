@@ -179,7 +179,7 @@ func update(dt: float) -> void:
 
 func update_visual(u: Dictionary) -> void:
 	u.car.position=game.world.relative_position(u.lane,u.distance,game.distance)
-	u.car.rotation.y=game.world.yaw_at(u.distance)
+	u.car.rotation.y=game.world.relative_yaw(u.distance,game.distance)
 	u.car.rotation.x=atan(game.world.slope_at(u.distance))
 	u.red.visible=not u.retreat and (not game.settings.shake or sin(game.elapsed*TAU*1.25)>=0)
 	u.blue.visible=not u.retreat and (not game.settings.shake or not u.red.visible)

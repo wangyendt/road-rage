@@ -1,5 +1,7 @@
 extends Control
 ## Resolution-independent, keyboard/gamepad-accessible arcade interface.
+const TrackRoute = preload("res://scripts/track_route.gd")
+var route_previews: Dictionary={}
 const Weapons = preload("res://scripts/weapons.gd")
 const Data = preload("res://scripts/game_data.gd")
 const Feedback = preload("res://scripts/race_feedback.gd")
@@ -91,7 +93,7 @@ func _draw() -> void:
 		"profile": _profile()
 		"bindings": _bindings()
 		"garage": _garage()
-		"race", "countdown": _race()
+		"race", "countdown", "falling": _race()
 		"paused":
 			_race(false)
 			_pause()
@@ -246,7 +248,8 @@ func _race(interactive: bool = true) -> void:
 	_text(game.controls.label("boost")+"  氮气加速",Vector2(775,824),14,WHITE)
 	draw_rect(Rect2(500,839,423,7),Color("284350"))
 	draw_rect(Rect2(500,839,423*game.nitro/100,7),CYAN if not game.boost_active else WHITE)
-	if game.boost_active: _center("超 频 加 速",Vector2(713,777),22,CYAN)
+	if game.wrong_way(): _center("逆行 ↑↑ · 极速 +8% · 注意迎面车辆",Vector2(713,777),18,ORANGE)
+	elif game.boost_active: _center("超 频 加 速",Vector2(713,777),22,CYAN)
 	var c = Vector2(1274,755)
 	draw_circle(c,100,Color(0.04,0.09,0.15,0.83))
 	draw_arc(c,88,PI*0.72,PI*2.28,65,Color("334c5a"),4,true)
@@ -264,7 +267,11 @@ func _race(interactive: bool = true) -> void:
 		_text("连击",Vector2(253,292),16,WHITE)
 		var fraction = game.combo_time/5
 		draw_line(Vector2(205,301),Vector2(205+90*fraction,301),ORANGE,3,true)
-	if game.ride.airborne and game.ride.height>0.3 and game.player.recovery_time<=0:
+	if game.state=="falling":
+		_panel(FLIGHT_RECT,Color(0.03,0.10,0.16,0.8),7,CYAN)
+		_text("坠海中 · 脱离路面",Vector2(1114,276),19,CYAN)
+		_text("落入海面将终止比赛",Vector2(1114,305),14,WHITE)
+	elif game.ride.airborne and game.ride.height>0.3 and game.player.recovery_time<=0:
 		_panel(FLIGHT_RECT,Color(0.03,0.10,0.16,0.72),7,CYAN)
 		_text("展体 / "+game.stunt.stage if game.stunt.active else "腾空",Vector2(1114,272),16,CYAN)
 		_text("%.1fm · %.1fs"%[game.ride.height,game.ride.air_time],Vector2(1250,272),16,WHITE)
@@ -276,6 +283,10 @@ func _race(interactive: bool = true) -> void:
 		_text(hint,Vector2(1114,303),13,WHITE)
 	elif game.stunt_notice>0:
 		_text("展体成功 +300 分 / +12 氮气",Vector2(1114,291),14,CYAN)
+	elif not game.race_rules.air_walls and absf(game.lane)>game.world.road_half_width(game.distance):
+		_panel(FLIGHT_RECT,Color(0.03,0.10,0.16,0.8),7,ORANGE)
+		_text("路肩 / 非铺装",Vector2(1114,276),18,ORANGE)
+		_text("减速中 · 回到路面恢复速度",Vector2(1114,304),13,WHITE)
 	elif not game.world.road_hint(game.distance).is_empty():
 		_text(game.world.road_hint(game.distance),Vector2(1114,291),14,ORANGE)
 	_weapon_hud(interactive)
@@ -368,6 +379,11 @@ func _status_icon(kind: String, c: Vector2, radius: float, color: Color) -> void
 	var z=radius/24.0
 	var width=maxf(1.5,2.4*z)
 	match kind:
+		"sea":
+			for row in 3:
+				var wave=PackedVector2Array()
+				for i in 33: wave.append(c+Vector2(-24+i*1.5,row*10-10+sin(i*TAU/16)*3)*z)
+				draw_polyline(wave,color,width,true)
 		"siren":
 			draw_arc(c+Vector2(0,3)*z,14*z,PI,TAU,24,color,width,true)
 			draw_line(c+Vector2(-14,3)*z,c+Vector2(-14,12)*z,color,width,true)
@@ -442,9 +458,9 @@ func _settings() -> void:
 	_shade(0.87)
 	_text("TUNE YOUR RIDE",Vector2(292,116),53,WHITE,title_font)
 	_text("游戏设置",Vector2(292,158),23,CYAN)
-	var rows = [["volume","主音量","%d%%"%roundi(game.settings.volume*100)],["music","电子配乐","开启" if game.settings.music else "关闭"],["shake","震动 / 动效 / 氮气气流","开启" if game.settings.shake else "关闭"],["quality","渲染质量","精致 · 120 FPS 上限" if game.settings.quality else "流畅 · 60 FPS 上限"],["map","赛道小地图","显示" if game.settings.map else "隐藏"],["mirror","实时后视镜","显示" if game.settings.mirror else "隐藏"],["bindings","修改快捷键","KEY BINDINGS  →"]]
-	for i in rows.size(): _button(rows[i][0],rows[i][1],Rect2(292,201+i*68,856,53),false,rows[i][2])
-	_text("AI 数量、场景和五档难度在赛前设置；快捷键会自动保存。",Vector2(292,727),16,MUTED)
+	var rows = [["volume","主音量","%d%%"%roundi(game.settings.volume*100)],["music","电子配乐","开启" if game.settings.music else "关闭"],["shake","震动 / 动效 / 氮气气流","开启" if game.settings.shake else "关闭"],["quality","渲染质量","精致 · 120 FPS 上限" if game.settings.quality else "流畅 · 60 FPS 上限"],["map","赛道小地图","显示" if game.settings.map else "隐藏"],["mirror","实时后视镜","显示" if game.settings.mirror else "隐藏"],["air_walls","赛道空气墙 · 下局生效","✓ 开启" if game.settings.air_walls else "— 关闭 / 可驶出道路"],["oncoming","对向车道 · 下局生效","✓ 开启 / 右侧通行" if game.settings.oncoming else "— 关闭"],["bindings","修改快捷键","KEY BINDINGS  →"]]
+	for i in rows.size(): _button(rows[i][0],rows[i][1],Rect2(292,191+i*56,856,46),false,rows[i][2])
+	_text("空气墙 / 对向车流从下一场生效；关闭空气墙可撞楼或坠海。",Vector2(292,727),16,MUTED)
 	_button("back","返回",Rect2(292,766,250,55),true,"ESC")
 
 func _help() -> void:
@@ -575,7 +591,8 @@ func _setup() -> void:
 		_text(course.en,rect.position+Vector2(20,38),27,course.color,title_font)
 		_text(course.name,rect.position+Vector2(20,72),23,WHITE)
 		_text("%.1f KM"%(Data.race_length(i,game.race_options.get("distance",0))/1000),rect.position+Vector2(263,72),18,MUTED,number_font)
-		_paragraph(course.description,rect.position+Vector2(20,117),320,16,MUTED)
+		_paragraph(course.description,rect.position+Vector2(20,109),240,15,MUTED)
+		_route_preview(i,Rect2(rect.position+Vector2(280,92),Vector2(65,72)))
 		_text(course.subtitle,rect.position+Vector2(20,186),14,course.color)
 		if game.race_options.course==i: _text("已选",rect.position+Vector2(302,36),15,CYAN)
 	_panel(Rect2(889,205,475,443),Color(0.035,0.075,0.13,0.95),10,Color("314653"))
@@ -732,7 +749,7 @@ func _minimap() -> void:
 	else: _text("赛道地图",rect.position+Vector2(15,25),16,WHITE)
 	_text(game.controls.label("toggle_map"),rect.position+Vector2(199,25),14,CYAN,number_font)
 	var points = PackedVector2Array()
-	for i in 100: points.append(_map_position(float(i)/99*game.track_length,0,rect))
+	for i in 321: points.append(_map_position(float(i)/320*game.track_length,0,rect))
 	draw_polyline(points,Color("294453"),8,true)
 	draw_polyline(points,Color("78959e").lerp(Feedback.RED,f.tint*3),2,true)
 	for r in game.rivals:
@@ -749,13 +766,25 @@ func _minimap() -> void:
 	draw_circle(player_pos,5,ORANGE)
 	_text("你",player_pos+Vector2(10,5),13,WHITE)
 	_text("FINISH",_map_position(game.track_length,0,rect)+Vector2(-24,-11),12,CYAN,number_font)
-	_text("方框：警车 / 橙点：你" if game.police.pursuit_active else "橙点：你  /  彩点：对手",rect.position+Vector2(15,rect.size.y-15),12,MUTED)
+	_text("方框：警车 / 橙点：你" if game.police.pursuit_active else "等比路线 / 橙点：你",rect.position+Vector2(15,rect.size.y-15),12,MUTED)
 
 func _map_position(at: float, lane: float, rect: Rect2) -> Vector2:
-	var t = clampf(at/game.track_length,0,1)
-	var x = game.world.center_at(t*game.track_length)
-	var extent = game.world.course.curve[0]+game.world.course.curve[2]
-	return Vector2(rect.position.x+rect.size.x*0.5+x/maxf(extent,1)*70+lane*0.55,rect.end.y-46-t*(rect.size.y-102))
+	# One uniform metres-to-pixels projection shared by road and all markers.
+	return game.world.route.project(clampf(at,0,game.track_length),lane,Rect2(rect.position+Vector2(18,52),rect.size-Vector2(36,91)))
+
+func _route_preview(index: int, rect: Rect2) -> void:
+	var metres=Data.race_length(index,game.race_options.get("distance",0))
+	var key="%d_%d"%[index,int(metres)]
+	if not route_previews.has(key):
+		var path=TrackRoute.new()
+		path.build(index,metres)
+		route_previews[key]=path
+	var path=route_previews[key]
+	var points=PackedVector2Array()
+	for i in 161: points.append(path.project(metres*i/160.0,0,rect))
+	draw_polyline(points,Data.COURSES[index].color,2,true)
+	draw_circle(points[0],3,ORANGE)
+	draw_circle(points[-1],3,WHITE)
 
 func _rear_view() -> void:
 	var rect = Rect2(516,106,420,125)

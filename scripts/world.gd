@@ -1,6 +1,11 @@
 extends Node3D
 const Geo = preload("res://scripts/geo.gd")
+const Route = preload("res://scripts/track_route.gd")
 const Data = preload("res://scripts/game_data.gd")
+var route=Route.new()
+var air_walls=true
+var oncoming=false
+var solids: Array[Dictionary]=[]
 var course_index = 0
 var theme = 0
 var wind_rotors: Array[Node3D] = []
@@ -11,6 +16,7 @@ var chunks: Array[Node3D] = []
 var environment: Environment
 var sun: DirectionalLight3D
 var road_mat: Material
+var sea_mat: ShaderMaterial
 var rng = RandomNumberGenerator.new()
 var scenery: Node3D
 var finish_gate: Node3D
@@ -19,26 +25,58 @@ var spectators: Array[Dictionary] = []
 var finish_line: Node3D
 
 func center_at(d: float) -> float:
-	var c = course.curve
-	return sin(d*c[1])*c[0]+sin(d*c[3])*c[2]
+	return route.point(d).x
 
 func yaw_at(d: float) -> float:
-	var c = course.curve
-	return -atan(cos(d*c[1])*c[0]*c[1]+cos(d*c[3])*c[2]*c[3])
+	return -route.heading(d)
+
+func relative_yaw(d: float, player_distance: float) -> float:
+	return yaw_at(d)-yaw_at(player_distance)
 
 func relative_position(lane: float, track_distance: float, player_distance: float) -> Vector3:
-	return Vector3(lane+center_at(track_distance)-center_at(player_distance),height_at(track_distance)-height_at(player_distance),player_distance-track_distance)
+	var p=route.point(track_distance,lane)-route.point(player_distance)
+	var angle=route.heading(player_distance)
+	return Vector3(p.dot(Vector2(cos(angle),-sin(angle))),height_at(track_distance)-height_at(player_distance),-p.dot(Vector2(sin(angle),cos(angle))))
+
+func configure_rules(walls: bool, opposite: bool) -> void:
+	if air_walls==walls and oncoming==opposite: return
+	air_walls=walls
+	oncoming=opposite
+	for chunk in chunks: chunk.set_meta("segment",-999999)
+
+func sea_side(d: float, side: int) -> bool:
+	return (course.id=="coast" and side>0) or (course.id=="harbor" and d>course.length*0.66)
+
+func over_sea(lane: float, d: float) -> bool:
+	return absf(lane)>road_half_width(d)+0.9 and sea_side(d,1 if lane>0 else -1)
+
+func roadside_hit(from_lane: float, from_d: float, to_lane: float, to_d: float, height: float) -> Dictionary:
+	for entry in solids:
+		var at=float(entry.chunk.get_meta("segment",-999999))*CHUNK_LENGTH-entry.base.z
+		if sea_side(at,1 if entry.base.x>0 else -1): continue
+		if absf(at-to_d)>entry.size.z+absf(to_d-from_d)+5: continue
+		var margin=Vector3(0.65,0.85,1.15)
+		var box=AABB(Vector3(entry.base.x,entry.base.y,0)-entry.size*0.5-margin,entry.size+margin*2)
+		var a=relative_position(from_lane,from_d,at)+Vector3(0,height+0.85,0)
+		var b=relative_position(to_lane,to_d,at)+Vector3(0,height+0.85,0)
+		if box.has_point(b) or box.intersects_segment(a,b)!=null:
+			return {"cause":entry.cause,"lane":entry.base.x-signf(entry.base.x)*(entry.size.x*0.5+1.0)}
+	return {}
 
 func build(map_index: int = 0) -> void:
 	for child in get_children(): child.free()
 	chunks.clear()
+	solids.clear()
 	wind_rotors.clear()
 	spectators.clear()
 	course_index = clampi(map_index,0,Data.COURSES.size()-1)
 	course = Data.COURSES[course_index].duplicate()
+	route.build(course_index,course.length)
 	theme = course.get("theme",course_index)
 	rng.seed = 20260924+course_index*77
 	_environment()
+	sea_mat=ShaderMaterial.new()
+	sea_mat.shader=load("res://shaders/sea.gdshader")
 	road_mat = ShaderMaterial.new()
 	road_mat.shader = load("res://shaders/asphalt.gdshader")
 	road_mat.set_shader_parameter("wetness",0.8 if course.id=="storm" else 0.0)
@@ -90,6 +128,7 @@ func set_race_length(length: float) -> void:
 	# Terrain must continue beyond the old finish, not become a long flat extension.
 	course = course.duplicate()
 	course.length = maxf(1000.0,length)
+	route.build(course_index,course.length)
 	for chunk in chunks: chunk.set_meta("segment",-999999)
 
 func _environment() -> void:
@@ -184,10 +223,12 @@ func _chunk(index: int) -> Node3D:
 	for child in n.get_children():
 		if child.name not in ["RoadSurface","WorkCones"]:
 			child.set_meta("base_position",child.position)
+			child.set_meta("base_rotation",child.rotation)
 	return n
 
 func _make_scenery(n: Node3D, index: int, amber: Material, cyan: Material, concrete: Material) -> void:
 	for side in [-1,1]:
+		if course.id=="coast" and side>0: continue
 		if course.id in ["skyway","volcano","mesa","glacier"]:
 			_expansion_landmark(n,index,side)
 		elif course.id in ["harbor","neon","coast"]:
@@ -199,6 +240,7 @@ func _make_scenery(n: Node3D, index: int, amber: Material, cyan: Material, concr
 				material.set_shader_parameter("light_color",Color("cc75dc") if course.id=="neon" and index%2==0 else Color("72b4d4"))
 				var x = side*(rng.randf_range(35,65)+j*34)
 				var b = Geo.box(n,Vector3(rng.randf_range(12,22),height,rng.randf_range(15,28)),Vector3(x,height/2-10,rng.randf_range(-17,17)),material)
+				solids.append({"chunk":n,"base":b.position,"size":b.mesh.size,"cause":"撞上楼体"})
 				b.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 				if index%3==0: Geo.box(n,Vector3(13,0.13,0.16),Vector3(x,height-9.5,0),amber if side>0 else cyan)
 		elif course.id in ["canyon","quarry"]:
@@ -207,7 +249,8 @@ func _make_scenery(n: Node3D, index: int, amber: Material, cyan: Material, concr
 				var x = side*(24+j*21+rng.randf()*8)
 				var stone = Geo.mat(Color("a36143") if j%2==0 else Color("c5845a"),0,1)
 				var rock = Geo.wedge(n,Vector3(18,h,25),Vector3(x,h/2-7,rng.randf_range(-15,15)),stone)
-				rock.rotation.y = rng.randf()*2
+				# Axis-aligned rock solid matches the rendered roadside shape.
+				solids.append({"chunk":n,"base":rock.position,"size":rock.mesh.size,"cause":"撞上岩壁"})
 				Geo.box(n,Vector3(14,h*0.15,20),Vector3(x,h*0.60-7,0),Geo.mat(Color("d89b6b"),0,1))
 			var green = Geo.mat(Color("496b46"),0,1)
 			var cactus_x = side*17.0
@@ -278,7 +321,7 @@ func update_track(distance: float, finish: float, time: float = 0.0, view_height
 		var chunk = chunks[posmod(segment,CHUNK_COUNT)]
 		var d = segment*CHUNK_LENGTH
 		chunk.position = relative_position(0,d,distance)
-		chunk.rotation = Vector3.ZERO
+		chunk.rotation = Vector3(0,relative_yaw(d,distance),0)
 		if chunk.get_meta("segment",-999999)!=segment:
 			_shape_chunk(chunk,d)
 			chunk.set_meta("segment",segment)
@@ -287,7 +330,7 @@ func update_track(distance: float, finish: float, time: float = 0.0, view_height
 		var bridge = chunk.get_node_or_null("Bridge")
 		if bridge: bridge.visible = d>=finish*0.66 and d<=finish+200
 	finish_gate.position = relative_position(0,finish,distance)
-	finish_gate.rotation.y = yaw_at(finish)
+	finish_gate.rotation.y = relative_yaw(finish,distance)
 	finish_gate.rotation.x = atan(slope_at(finish))
 	for rotor in wind_rotors: rotor.rotation.z=time*0.38
 	finish_gate.visible = finish-distance < 700 and finish-distance > -100
@@ -405,14 +448,16 @@ func road_hint(d: float) -> String:
 	return ""
 
 func _point(d: float, at: float, fraction: float, y: float) -> Vector3:
-	return Vector3(center_at(at)-center_at(d)+road_half_width(at)*fraction,height_at(at)-height_at(d)+y,d-at)
+	return relative_position(road_half_width(at)*fraction,at,d)+Vector3(0,y,0)
 
-func _ribbon(st: SurfaceTool, d: float, x1: float, x2: float, y: float, dashed: bool = false) -> void:
+func _ribbon(st: SurfaceTool, d: float, x1: float, x2: float, y: float, dashed: bool = false, flat_water: bool = false) -> void:
 	for step in 16:
 		if dashed and step%4>=2: continue
 		var a=d-20+step*2.5
 		var b=a+2.5
 		var points=[_point(d,a,x1,y),_point(d,b,x1,y),_point(d,b,x2,y),_point(d,a,x2,y)]
+		if flat_water:
+			for i in points.size(): points[i].y=-18.0-height_at(d)
 		for index in [0,1,2,0,2,3]:
 			st.set_uv(Vector2(points[index].x,points[index].z)*0.2)
 			st.add_vertex(points[index])
@@ -428,35 +473,45 @@ func _shape_chunk(chunk: Node3D, d: float) -> void:
 	st=SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	for x in [-0.96,0.96]: _ribbon(st,d,x-0.007,x+0.007,0.006)
-	for x in [-0.475,0.0,0.475]: _ribbon(st,d,x-0.007,x+0.007,0.009,true)
+	for x in ([-0.475,0.475] if oncoming else [-0.475,0.0,0.475]): _ribbon(st,d,x-0.007,x+0.007,0.009,true)
 	st.generate_normals()
 	st.set_material(white_material())
 	st.commit(mesh)
-	st=SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for side in [-1,1]:
-		_ribbon(st,d,side*1.00,side*1.07,-0.06)
-		_ribbon(st,d,side*1.075-0.013,side*1.075+0.013,0.85)
-	st.generate_normals()
-	var rail=Geo.mat(Color("526c78"),0.5,0.65)
-	rail.cull_mode=BaseMaterial3D.CULL_DISABLED
-	st.set_material(rail)
-	st.commit(mesh)
-	if course.id not in ["harbor","neon"]:
+	if oncoming:
 		st=SurfaceTool.new()
 		st.begin(Mesh.PRIMITIVE_TRIANGLES)
-		_ribbon(st,d,-16,-1.09,-2.5)
-		if course.id!="coast": _ribbon(st,d,1.09,16,-2.5)
+		for x in [-0.022,0.022]: _ribbon(st,d,x-0.009,x+0.009,0.015)
 		st.generate_normals()
-		var earth=Color("ad7950") if course.id in ["canyon","quarry"] else Color("526c47")
-		if course.id in ["alpine","storm"]: earth=Color("5f827c")
-		st.set_material(Geo.mat(earth,0,0.95))
+		st.set_material(Geo.mat(Color("ffd34f"),0,0.8,0.3))
+		st.commit(mesh)
+	if air_walls:
+		st=SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		for side in [-1,1]:
+			_ribbon(st,d,side*1.00,side*1.07,-0.06)
+			_ribbon(st,d,side*1.075-0.013,side*1.075+0.013,0.85)
+		st.generate_normals()
+		var rail=Geo.mat(Color("526c78"),0.5,0.65)
+		rail.cull_mode=BaseMaterial3D.CULL_DISABLED
+		st.set_material(rail)
+		st.commit(mesh)
+	for side in [-1,1]:
+		st=SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		var water=sea_side(d,side)
+		_ribbon(st,d,minf(side*1.0,side*128),maxf(side*1.0,side*128),-18.0 if water else -0.04,false,water)
+		st.generate_normals()
+		var earth=Color("ad7950") if theme==1 else (Color("34434c") if course.id in ["harbor","neon"] else Color("526c47"))
+		if course.id in ["alpine","storm","glacier"]: earth=Color("90aaad")
+		st.set_material(sea_mat if water else Geo.mat(earth,0,0.95))
 		st.commit(mesh)
 	chunk.get_node("RoadSurface").mesh=mesh
 	for child in chunk.get_children():
 		if child.has_meta("base_position"):
 			var p: Vector3=child.get_meta("base_position")
-			child.position=p+Vector3(center_at(d-p.z)-center_at(d),height_at(d-p.z)-height_at(d),0)
+			if absf(p.x)>20: child.visible=not sea_side(d,1 if p.x>0 else -1)
+			child.position=relative_position(p.x,d-p.z,d)+Vector3(0,p.y,0)
+			child.rotation=child.get_meta("base_rotation",Vector3.ZERO)+Vector3(0,relative_yaw(d-p.z,d),0)
 	var cones=chunk.get_node("WorkCones")
 	cones.visible=road_half_width(d)<9.4
 	if cones.visible:
