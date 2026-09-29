@@ -53,8 +53,9 @@ func run() -> void:
 	root.add_child(game)
 	game.set_process(false)
 	# Every map AND every bike: very hard contact, no damage-cooldown protection.
-	for course in 12:
-		prepare(course,course)
+	for bike in game.Economy.BIKES.size():
+		var course=bike%12
+		prepare(course,bike)
 		game.distance=800
 		game.speed=65
 		game.health=77

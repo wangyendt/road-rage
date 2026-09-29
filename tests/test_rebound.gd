@@ -92,12 +92,12 @@ func run() -> void:
 	check(high.restitution==0.8,"invalid restitution cannot add infinite energy")
 	high.configure({"restitution":-2.0})
 	check(high.restitution==0,"negative restitution is clamped")
-	check(Data.COURSES.size()==12 and Economy.BIKES.size()==12,"twelve distinct maps and motorcycles")
+	check(Data.COURSES.size()==12 and Economy.BIKES.size()==20,"twelve maps and twenty distinct motorcycles")
 	var bike_ids=[]
 	for bike in Economy.BIKES:
 		check(bike.restitution>=0 and bike.restitution<1 and bike.air_control>0 and bike.air_control<=1,"valid physical tuning for "+bike.id)
 		bike_ids.append(bike.id)
-	check(bike_ids.size()==12 and Economy.BIKES[8].restitution>Economy.BIKES[9].restitution,"new spring and damper motorcycles have meaningful differences")
+	check(bike_ids.size()==20 and Economy.BIKES[8].restitution>Economy.BIKES[9].restitution,"new spring and damper motorcycles have meaningful differences")
 	game=load("res://scenes/main.tscn").instantiate()
 	game.test_mode=true
 	root.add_child(game)

@@ -47,17 +47,17 @@ func fresh(course: int = 5) -> void:
 	game.traffic.clear()
 func run() -> void:
 	check(Data.COURSES.size()==12,"twelve selectable race locations")
-	check(Economy.BIKES.size()==12,"twelve purchasable motorcycles")
+	check(Economy.BIKES.size()==20,"twenty purchasable motorcycles")
 	check(Traffic.MODELS.size()==9,"nine dimensioned traffic archetypes")
 	var ledger=Economy.new()
-	ledger.cash=100000
+	ledger.cash=1000000
 	for bike in Economy.BIKES: ledger.select(bike.id)
-	check(ledger.owned.size()==12 and ledger.equipped=="rover","all new motorcycles can be bought and equipped")
+	check(ledger.owned.size()==20 and ledger.equipped=="sovereign","all new motorcycles can be bought and equipped")
 	var cfg=ConfigFile.new()
 	ledger.save_config(cfg)
 	var restored=Economy.new()
 	restored.load_config(cfg)
-	check(restored.owned.size()==12 and restored.equipped=="rover","expanded garage persists without losing old purchases")
+	check(restored.owned.size()==20 and restored.equipped=="sovereign","expanded garage persists without losing old purchases")
 	game=load("res://scenes/main.tscn").instantiate()
 	game.test_mode=true
 	root.add_child(game)

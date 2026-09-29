@@ -35,7 +35,7 @@ grep -q 'CHALLENGE_TEST_RESULTS passed=40 failed=0' "$ROOT/builds/test-logs/chal
 "$GODOT" --path "$ROOT" --script tests/test_challenge_ui.gd 2>&1 | tee "$ROOT/builds/test-logs/challenge-ui.log"
 grep -q 'CHALLENGE_UI_TEST_RESULTS passed=12 failed=0' "$ROOT/builds/test-logs/challenge-ui.log"
 "$GODOT" --headless --path "$ROOT" --script tests/test_rebound.gd 2>&1 | tee "$ROOT/builds/test-logs/rebound.log"
-grep -q 'REBOUND_TEST_RESULTS passed=44 failed=0' "$ROOT/builds/test-logs/rebound.log"
+grep -q 'REBOUND_TEST_RESULTS passed=52 failed=0' "$ROOT/builds/test-logs/rebound.log"
 "$GODOT" --path "$ROOT" --script tests/test_rebound_ui.gd 2>&1 | tee "$ROOT/builds/test-logs/rebound-ui.log"
 grep -q 'REBOUND_UI_TEST_RESULTS passed=21 failed=0' "$ROOT/builds/test-logs/rebound-ui.log"
 "$GODOT" --headless --path "$ROOT" --script tests/test_race_feedback.gd 2>&1 | tee "$ROOT/builds/test-logs/race-feedback.log"
@@ -45,7 +45,7 @@ grep -q 'RACE_FEEDBACK_UI_TEST_RESULTS passed=20 failed=0' "$ROOT/builds/test-lo
 "$GODOT" --headless --path "$ROOT" --script tests/test_flight_camera.gd 2>&1 | tee "$ROOT/builds/test-logs/flight-camera.log"
 grep -q 'FLIGHT_CAMERA_TEST_RESULTS passed=33 failed=0' "$ROOT/builds/test-logs/flight-camera.log"
 "$GODOT" --headless --path "$ROOT" --script tests/test_stunts.gd 2>&1 | tee "$ROOT/builds/test-logs/stunts.log"
-grep -q 'STUNT_TEST_RESULTS passed=75 failed=0' "$ROOT/builds/test-logs/stunts.log"
+grep -q 'STUNT_TEST_RESULTS passed=107 failed=0' "$ROOT/builds/test-logs/stunts.log"
 "$GODOT" --path "$ROOT" --script tests/test_stunts_ui.gd 2>&1 | tee "$ROOT/builds/test-logs/stunts-ui.log"
 grep -q 'STUNT_UI_TEST_RESULTS passed=20 failed=0' "$ROOT/builds/test-logs/stunts-ui.log"
 "$GODOT" --path "$ROOT" --script tests/test_visibility.gd 2>&1 | tee "$ROOT/builds/test-logs/visibility.log"
@@ -56,5 +56,13 @@ grep -q 'PASS UI map must use the same scale' "$ROOT/builds/test-logs/map-alignm
 grep -q 'ROAD_RULES_TEST_RESULTS passed=52 failed=0' "$ROOT/builds/test-logs/road-rules.log"
 "$GODOT" --path "$ROOT" --script tests/test_road_rules_ui.gd 2>&1 | tee "$ROOT/builds/test-logs/road-rules-ui.log"
 grep -q 'ROAD_RULES_UI_TEST_RESULTS passed=14 failed=0' "$ROOT/builds/test-logs/road-rules-ui.log"
+"$GODOT" --headless --path "$ROOT" --script tests/test_route_design.gd 2>&1 | tee "$ROOT/builds/test-logs/route-design.log"
+grep -q 'ROUTE_DESIGN_TEST_RESULTS passed=216 failed=0' "$ROOT/builds/test-logs/route-design.log"
+"$GODOT" --path "$ROOT" --script tests/test_route_design_ui.gd 2>&1 | tee "$ROOT/builds/test-logs/route-design-ui.log"
+grep -q 'ROUTE_DESIGN_UI_TEST_RESULTS passed=36 failed=0' "$ROOT/builds/test-logs/route-design-ui.log"
+"$GODOT" --headless --path "$ROOT" --script tests/test_circuits_garage.gd 2>&1 | tee "$ROOT/builds/test-logs/circuits-garage.log"
+grep -q 'CIRCUITS_GARAGE_TEST_RESULTS passed=79 failed=0' "$ROOT/builds/test-logs/circuits-garage.log"
+"$GODOT" --path "$ROOT" --script tests/test_premium_ui.gd 2>&1 | tee "$ROOT/builds/test-logs/premium-ui.log"
+grep -q 'PREMIUM_UI_TEST_RESULTS passed=16 failed=0' "$ROOT/builds/test-logs/premium-ui.log"
 if grep -E '^(SCRIPT ERROR:|ERROR:)'   "$ROOT/builds/test-logs/"*.log; then exit 1; fi
-printf '\nAll 709 assertions passed.\n'
+printf '\nAll 1096 assertions passed.\n'

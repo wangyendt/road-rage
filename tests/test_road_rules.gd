@@ -25,8 +25,8 @@ func run() -> void:
 		var good=true
 		for i in range(1,100):
 			var d=route.length*i/100
-			good=good and absf(route.point(d+1).distance_to(route.point(d))-1)<0.005 and absf(route.heading(d))<0.72 and absf(route.heading(d+1)-route.heading(d))<0.003
-		check(good,"map %d has metre arc length and gentle forward-only curves"%course)
+			good=good and absf(route.point(d+1).distance_to(route.point(d))-1)<0.005 and absf(route.heading(d+1)-route.heading(d))<Route.MAX_CURVATURE
+		check(good,"map %d has metre arc length and bounded multi-direction curves"%course)
 		fingerprints[str(route.point(route.length*0.3))+str(route.point(route.length*0.8))]=true
 		var rect=Rect2(10,10,200,180)
 		var d=route.length*0.4

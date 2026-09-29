@@ -75,7 +75,7 @@ func run() -> void:
 		for n in 20:
 			if absf(game.world.height_at(Data.COURSES[course].length+500+n*40))>0.1: varied=true
 		game.world.update_track(end-100,end)
-		check(game.world.course.length==end and game.world.height_at(end)==0 and game.world.finish_gate.visible and absf(game.world.finish_gate.position.z+100)<0.1 and (varied or course==0),"map %d extends terrain and places level finish at long distance"%course)
+		check(game.world.course.length==end and game.world.height_at(end)==0 and game.world.finish_gate.visible and game.world.finish_gate.position.distance_to(game.world.relative_position(0,end,end-100))<0.01 and (varied or course==0),"map %d extends terrain and places level finish on actual curved route"%course)
 	check(Data.COURSES[5].length==7200,"changing world length never mutates shared course catalog")
 	fresh(2)
 	game.distance=5500
