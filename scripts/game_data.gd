@@ -2,18 +2,18 @@ extends RefCounted
 const Weapons=preload("res://scripts/weapons.gd")
 ## Original rider identities and genuinely different race locations.
 const COURSES = [
-	{"id":"harbor","name":"港湾高架","en":"HARBOR RUN","length":5400.0,"subtitle":"落日海湾 / 跨海桥梁","description":"宽阔高架与长直道，适合贴身缠斗和氮气超车。","color":Color("ffad78"),"curve":[31.0,0.0017,12.0,0.0039],"traffic":1.0},
-	{"id":"canyon","name":"赤岩峡谷","en":"RED ROCK PASS","length":4800.0,"subtitle":"荒漠峡谷 / 砂岩山脊","description":"蜿蜒峡谷与低矮岩壁，连续转向考验走线。","color":Color("ec9c59"),"curve":[72.0,0.0012,31.0,0.0032],"traffic":0.78},
-	{"id":"alpine","name":"雪岭林道","en":"ALPINE RIDGE","length":5200.0,"subtitle":"高山针叶林 / 远眺雪峰","description":"冷色山地、大片针叶林和长弯道，保持节奏最重要。","color":Color("a6e4d4"),"curve":[90.0,0.0010,22.0,0.0028],"traffic":0.65},
-	{"id":"neon","name":"霓虹都市","en":"NEON AFTERHOURS","length":6200.0,"subtitle":"夜间高速 / 霓虹天际线","description":"灯光隧廊与密集车流；利用后视镜防住追击。","color":Color("c8a4ff"),"curve":[25.0,0.0022,18.0,0.0044],"traffic":1.22},
-	{"id":"coast","name":"海崖天际线","en":"COASTLINE FLIGHT","length":6800.0,"subtitle":"海崖起伏 / 跨谷飞跃","description":"掠过海岸与石拱。高速越过坡顶会离地，落地前留好走线。","color":Color("64dcca"),"curve":[65.0,0.0018,18.0,0.006],"traffic":0.85,"theme":0},
-	{"id":"windfarm","name":"风车丘陵","en":"TURBINE HILLS","length":7200.0,"subtitle":"连绵丘陵 / 巨型风机","description":"连续波浪坡与风机群。长行程悬挂更适合反复腾空。","color":Color("d0e597"),"curve":[75.0,0.0014,20.0,0.0045],"traffic":0.8,"theme":2},
-	{"id":"quarry","name":"矿场运输线","en":"QUARRY EXPRESS","length":5800.0,"subtitle":"施工收窄 / 碎石坡道","description":"重卡、锥桶与碎石路交替出现；提前减速通过窄口。","color":Color("ffbf67"),"curve":[65.0,0.0021,28.0,0.005],"traffic":1.12,"theme":1},
-	{"id":"storm","name":"雨雾山脊","en":"STORM RIDGE","length":6600.0,"subtitle":"湿滑山路 / 急弯长坡","description":"冷雨中的高差山路，抓地力降低。坡顶加速前先看前方。","color":Color("90bced"),"curve":[88.0,0.0018,30.0,0.006],"traffic":0.75,"theme":3},
-	{"id":"skyway","name":"云端天路","en":"SKYWAY ASCENT","length":8600.0,"subtitle":"云海高架 / 陡坡连飞","description":"穿越高塔与云海，陡坡抛离路面，再用弹性悬挂接住落地。","color":Color("8fe5ff"),"curve":[62.0,0.0015,20.0,0.004],"traffic":0.65,"theme":0,"amplitude":42.0,"period":1150.0,"hump_width":200.0,"hump_peak":34.0},
-	{"id":"volcano","name":"熔火脊线","en":"MAGMA RIDGE","length":8200.0,"subtitle":"玄武岩 / 熔光深谷","description":"黑色岩壁与熔光裂隙，高坡落差大，长弹簧摩托更有发挥。","color":Color("ff925c"),"curve":[68.0,0.0016,24.0,0.0045],"traffic":0.70,"theme":1,"amplitude":48.0,"period":1350.0,"hump_width":210.0,"hump_peak":39.0},
-	{"id":"mesa","name":"荒原巨浪","en":"MESA SURGE","length":9000.0,"subtitle":"巨型台地 / 碎石连坡","description":"巨岩拱门、连续大坡和碎石路段。控制落点，接出连续反弹。","color":Color("efc47a"),"curve":[85.0,0.0012,20.0,0.0038],"traffic":0.86,"theme":1,"amplitude":36.0,"period":980.0,"hump_width":180.0,"hump_peak":32.0},
-	{"id":"glacier","name":"冰川飞脊","en":"GLACIER LEAP","length":9400.0,"subtitle":"冰晶峡谷 / 冷色高差","description":"冰峰间的高架起伏路，湿滑弯道配合长坡，适合空中控向。","color":Color("b3d3ff"),"curve":[72.0,0.0014,27.0,0.0042],"traffic":0.60,"theme":2,"amplitude":52.0,"period":1450.0,"hump_width":220.0,"hump_peak":40.0}
+	{"id":"harbor","name":"港湾高架","en":"HARBOR RUN","length":5400.0,"subtitle":"落日海湾 / 跨海桥梁","description":"环绕港岛的不规则闭环，桥梁与环湾长弧连接；短中长为 1 / 2 / 4 圈。","color":Color("ffad78"),"curve":[31.0,0.0017,12.0,0.0039],"traffic":1.0},
+	{"id":"canyon","name":"赤岩峡谷","en":"RED ROCK PASS","length":4800.0,"subtitle":"荒漠峡谷 / 砂岩山脊","description":"固定种子的峡谷探路路线，方向自由变化；同一赛程可重复练习。","color":Color("ec9c59"),"curve":[72.0,0.0012,31.0,0.0032],"traffic":0.78},
+	{"id":"alpine","name":"雪岭林道","en":"ALPINE RIDGE","length":5200.0,"subtitle":"高山针叶林 / 远眺雪峰","description":"雪林随机远征，多方向绕行与不规则弯道；长程增加新路段。","color":Color("a6e4d4"),"curve":[90.0,0.0010,22.0,0.0028],"traffic":0.65},
+	{"id":"neon","name":"霓虹都市","en":"NEON AFTERHOURS","length":6200.0,"subtitle":"夜间高速 / 霓虹天际线","description":"绕城市街区一周的圆角闭环，斜直道与弯角组合，不再一路向北。","color":Color("c8a4ff"),"curve":[25.0,0.0022,18.0,0.0044],"traffic":1.22},
+	{"id":"coast","name":"海崖天际线","en":"COASTLINE FLIGHT","length":6800.0,"subtitle":"海崖起伏 / 跨谷飞跃","description":"沿大海湾绕行的环岸闭环；海在道路外侧，关闭护栏时留意落点。","color":Color("64dcca"),"curve":[65.0,0.0018,18.0,0.006],"traffic":0.85,"theme":0},
+	{"id":"windfarm","name":"风车丘陵","en":"TURBINE HILLS","length":7200.0,"subtitle":"连绵丘陵 / 巨型风机","description":"围绕风机群的三叶形闭环，凹入的内湾与丘陵波浪坡交替出现。","color":Color("d0e597"),"curve":[75.0,0.0014,20.0,0.0045],"traffic":0.8,"theme":2},
+	{"id":"quarry","name":"矿场运输线","en":"QUARRY EXPRESS","length":5800.0,"subtitle":"施工收窄 / 碎石坡道","description":"围绕矿坑的肾形闭环，内湾凹弯连接施工收窄段与重卡车流。","color":Color("ffbf67"),"curve":[65.0,0.0021,28.0,0.005],"traffic":1.12,"theme":1},
+	{"id":"storm","name":"雨雾山脊","en":"STORM RIDGE","length":6600.0,"subtitle":"湿滑山路 / 急弯长坡","description":"雨雾中的随机变向远征，路线走向不固定向北；相同赛程保持一致。","color":Color("90bced"),"curve":[88.0,0.0018,30.0,0.006],"traffic":0.75,"theme":3},
+	{"id":"skyway","name":"云端天路","en":"SKYWAY ASCENT","length":8600.0,"subtitle":"云海高架 / 陡坡连飞","description":"双翼状的不对称云端闭环，回旋高架与原有陡坡连飞结合。","color":Color("8fe5ff"),"curve":[62.0,0.0015,20.0,0.004],"traffic":0.65,"theme":0,"amplitude":42.0,"period":1150.0,"hump_width":200.0,"hump_peak":34.0},
+	{"id":"volcano","name":"熔火脊线","en":"MAGMA RIDGE","length":8200.0,"subtitle":"玄武岩 / 熔光深谷","description":"环绕火山口的多边不规则闭环，环山大弧与高坡落差交替。","color":Color("ff925c"),"curve":[68.0,0.0016,24.0,0.0045],"traffic":0.70,"theme":1,"amplitude":48.0,"period":1350.0,"hump_width":210.0,"hump_peak":39.0},
+	{"id":"mesa","name":"荒原巨浪","en":"MESA SURGE","length":9000.0,"subtitle":"巨型台地 / 碎石连坡","description":"荒原随机探路，多方向折向与台地起伏；长程生成更多不同路段。","color":Color("efc47a"),"curve":[85.0,0.0012,20.0,0.0038],"traffic":0.86,"theme":1,"amplitude":36.0,"period":980.0,"hump_width":180.0,"hump_peak":32.0},
+	{"id":"glacier","name":"冰川飞脊","en":"GLACIER LEAP","length":9400.0,"subtitle":"冰晶峡谷 / 冷色高差","description":"冰谷多湾闭环，路线绕回出发区；湿滑凹弯与高差共同考验节奏。","color":Color("b3d3ff"),"curve":[72.0,0.0014,27.0,0.0042],"traffic":0.60,"theme":2,"amplitude":52.0,"period":1450.0,"hump_width":220.0,"hump_peak":40.0}
 
 
 ]

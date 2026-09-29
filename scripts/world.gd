@@ -45,7 +45,7 @@ func configure_rules(walls: bool, opposite: bool) -> void:
 	for chunk in chunks: chunk.set_meta("segment",-999999)
 
 func sea_side(d: float, side: int) -> bool:
-	return (course.id=="coast" and side>0) or (course.id=="harbor" and d>course.length*0.66)
+	return (course.id=="coast" and side>0) or (course.id=="harbor" and terrain_distance(d)>terrain_length()*0.66)
 
 func over_sea(lane: float, d: float) -> bool:
 	return absf(lane)>road_half_width(d)+0.9 and sea_side(d,1 if lane>0 else -1)
@@ -89,6 +89,10 @@ func build(map_index: int = 0) -> void:
 	var ground_colors = [Color("172b42"),Color("8b5940"),Color("537a74"),Color("121527")]
 	var ground = Geo.box(self,Vector3(2600,1,2200),Vector3(0,-32,-700),Geo.mat(ground_colors[theme],0.15,0.75))
 	ground.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	if course.id in ["coast","harbor"]:
+		var ocean=Geo.box(self,Vector3(10000,0.1,10000),Vector3(0,-18.05,0),sea_mat)
+		ocean.name="OceanBackdrop"
+		ocean.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	for i in 12:
 		var height = rng.randf_range(60,180)
 		var pos = Vector3(-950+i*175,height/2-10,-950-rng.randf()*100)
@@ -315,6 +319,8 @@ func _gate(text: String, color: Color) -> Node3D:
 
 func update_track(distance: float, finish: float, time: float = 0.0, view_height: float = 0.0) -> void:
 	current_distance = distance
+	var ocean=get_node_or_null("OceanBackdrop")
+	if ocean: ocean.position.y=-18.05-height_at(distance)
 	var base = int(floor(distance/CHUNK_LENGTH))-6
 	for i in CHUNK_COUNT:
 		var segment = base+i
@@ -328,7 +334,7 @@ func update_track(distance: float, finish: float, time: float = 0.0, view_height
 		var sign_gate = chunk.get_node_or_null("SignGate")
 		if sign_gate: sign_gate.visible = absf(d-finish)>85 and (view_height<2.5 or absf(d-distance)>70)
 		var bridge = chunk.get_node_or_null("Bridge")
-		if bridge: bridge.visible = d>=finish*0.66 and d<=finish+200
+		if bridge: bridge.visible = sea_side(d,1)
 	finish_gate.position = relative_position(0,finish,distance)
 	finish_gate.rotation.y = relative_yaw(finish,distance)
 	finish_gate.rotation.x = atan(slope_at(finish))
@@ -408,8 +414,9 @@ func white_material() -> Material:
 	return Geo.mat(Color("d7e5df"),0.2,0.7)
 
 func height_at(d: float) -> float:
+	d=terrain_distance(d)
 	# Start and finish are level staging areas; all elevation is deterministic.
-	var ramp=smoothstep(160.0,340.0,d)*(1.0-smoothstep(course.length-400.0,course.length-180.0,d))
+	var ramp=smoothstep(160.0,340.0,d)*(1.0-smoothstep(terrain_length()-400.0,terrain_length()-180.0,d))
 	var amplitude=float(course.get("amplitude",[0.0,7.0,14.0,2.5,19.0,12.0,8.0,24.0][mini(course_index,7)]))
 	var base=amplitude*(0.65+0.45*sin(d*0.004)+0.2*sin(d*0.009))
 	var hump=0.0
@@ -425,16 +432,18 @@ func slope_at(d: float) -> float:
 	return (height_at(d+0.1)-height_at(d-0.1))/0.2
 
 func road_half_width(d: float) -> float:
+	d=terrain_distance(d)
 	if course_index<4: return 9.5
 	var period=1000.0 if course.id=="quarry" else 1550.0
 	var t=fposmod(d-850.0,period)
 	var pinch=smoothstep(0.0,90.0,t)*(1-smoothstep(280.0,390.0,t))
-	var staging=smoothstep(300.0,500.0,d)*(1-smoothstep(course.length-500,course.length-350,d))
+	var staging=smoothstep(300.0,500.0,d)*(1-smoothstep(terrain_length()-500,terrain_length()-350,d))
 	return 9.5-pinch*staging*(3.4 if course.id=="quarry" else 2.3)
 
 func surface_at(d: float) -> String:
+	d=terrain_distance(d)
 	if course.id in ["storm","glacier"]: return "wet"
-	if course.id in ["quarry","mesa"] and d>350 and d<course.length-350 and fposmod(d,1050)<350: return "gravel"
+	if course.id in ["quarry","mesa"] and d>350 and d<terrain_length()-350 and fposmod(d,1050)<350: return "gravel"
 	return "asphalt"
 
 func grip_at(d: float) -> float:
@@ -450,12 +459,28 @@ func road_hint(d: float) -> String:
 func _point(d: float, at: float, fraction: float, y: float) -> Vector3:
 	return relative_position(road_half_width(at)*fraction,at,d)+Vector3(0,y,0)
 
-func _ribbon(st: SurfaceTool, d: float, x1: float, x2: float, y: float, dashed: bool = false, flat_water: bool = false) -> void:
+# Bounded normal-offset shoulders also work around loops and returning routes.
+# Wide kilometre-scale strips would cut across another part of the circuit.
+func _terrain_point(d: float, at: float, fraction: float, y: float) -> Vector3:
+	var side=signf(fraction)
+	var width=road_half_width(at)
+	var shoulder=minf((absf(fraction)-1.0)*width,35.0)
+	return relative_position(side*(width+shoulder),at,d)+Vector3(0,y,0)
+
+func terrain_distance(d: float) -> float:
+	return fposmod(d,route.lap_length) if route.closed and route.course_index==course_index else d
+
+func terrain_length() -> float:
+	return route.lap_length if route.closed and route.course_index==course_index else course.length
+
+func _ribbon(st: SurfaceTool, d: float, x1: float, x2: float, y: float, dashed: bool = false, flat_water: bool = false, terrain: bool = false) -> void:
 	for step in 16:
 		if dashed and step%4>=2: continue
 		var a=d-20+step*2.5
 		var b=a+2.5
 		var points=[_point(d,a,x1,y),_point(d,b,x1,y),_point(d,b,x2,y),_point(d,a,x2,y)]
+		if terrain:
+			points=[_terrain_point(d,a,x1,y),_terrain_point(d,b,x1,y),_terrain_point(d,b,x2,y),_terrain_point(d,a,x2,y)]
 		if flat_water:
 			for i in points.size(): points[i].y=-18.0-height_at(d)
 		for index in [0,1,2,0,2,3]:
@@ -499,7 +524,7 @@ func _shape_chunk(chunk: Node3D, d: float) -> void:
 		st=SurfaceTool.new()
 		st.begin(Mesh.PRIMITIVE_TRIANGLES)
 		var water=sea_side(d,side)
-		_ribbon(st,d,minf(side*1.0,side*128),maxf(side*1.0,side*128),-18.0 if water else -0.04,false,water)
+		_ribbon(st,d,minf(side*1.0,side*128),maxf(side*1.0,side*128),-18.0 if water else -0.04,false,water,true)
 		st.generate_normals()
 		var earth=Color("ad7950") if theme==1 else (Color("34434c") if course.id in ["harbor","neon"] else Color("526c47"))
 		if course.id in ["alpine","storm","glacier"]: earth=Color("90aaad")

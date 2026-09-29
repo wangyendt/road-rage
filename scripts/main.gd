@@ -613,7 +613,7 @@ func _simulate_rival(r: Dictionary, dt: float) -> void:
 	var target = Director.target_speed(active_level,r.profile,r.distance-race_anchor,track_length-r.distance,boosting)
 	if active_level==5:
 		for car in traffic:
-			var ahead=car.distance-r.distance
+			var ahead=world.route.gap(car.distance,r.distance)
 			if ahead>0 and ahead<car.get("length",4.1)*0.5+10+maxf(0,r.speed-car.speed)*0.45 and absf(car.lane-r.lane)<car.get("width",1.95)*0.5+0.7:
 				target=minf(target,maxf(20,car.speed-3))
 	if r.stun>0: target = minf(target,45)
@@ -627,7 +627,7 @@ func _simulate_rival(r: Dictionary, dt: float) -> void:
 	var lean = clampf((r.lane-old_lane)/maxf(dt*4,0.001),-1,1)
 	r.node.animate(dt,r.speed,lean,boosting,total_time+r.phase)
 	for car in traffic:
-		if minf(car.distance-previous_distance,car.distance+car.speed*dt-r.distance)<car.get("length",4.1)*0.5+1.05 and maxf(car.distance-previous_distance,car.distance+car.speed*dt-r.distance)>-car.get("length",4.1)*0.5-1.05 and absf(car.lane-r.lane)<car.get("width",1.95)*0.5+0.45 and r.ride.y<world.height_at(car.distance)+car.get("height",1.75) and r.hit_cd<=0:
+		if minf(world.route.gap(car.distance,previous_distance),world.route.gap(car.distance,previous_distance)+car.speed*dt-(r.distance-previous_distance))<car.get("length",4.1)*0.5+1.05 and maxf(world.route.gap(car.distance,previous_distance),world.route.gap(car.distance,previous_distance)+car.speed*dt-(r.distance-previous_distance))>-car.get("length",4.1)*0.5-1.05 and absf(car.lane-r.lane)<car.get("width",1.95)*0.5+0.45 and r.ride.y<world.height_at(car.distance)+car.get("height",1.75) and r.hit_cd<=0:
 			_crash_rival(r,1 if r.lane>car.lane else -1)
 			return
 	if r.windup>0:
@@ -637,15 +637,15 @@ func _simulate_rival(r: Dictionary, dt: float) -> void:
 			_resolve_ai_attack(r)
 	elif r.cooldown<=0 and r.stun<=0:
 		r.target_id = -2
-		if Weapons.reaches(r.loadout.current,r.lane-lane,gap,r.ride.y-ride.y) and player.recovery_time<=0:
+		if Weapons.reaches(r.loadout.current,r.lane-lane,world.route.gap(r.distance,distance),r.ride.y-ride.y) and player.recovery_time<=0:
 			r.target_id = -1
 		elif r.profile.aggression>0.65:
 			for other in rivals:
-				if other.id!=r.id and other.hp>0 and other.node.recovery_time<=0 and Weapons.reaches(r.loadout.current,other.lane-r.lane,other.distance-r.distance,other.ride.y-r.ride.y):
+				if other.id!=r.id and other.hp>0 and other.node.recovery_time<=0 and Weapons.reaches(r.loadout.current,other.lane-r.lane,world.route.gap(other.distance,r.distance),other.ride.y-r.ride.y):
 					r.target_id = other.id
 					break
 		if r.target_id != -2: r.windup = d.reaction
-	if absf(r.ride.y-ride.y)<1.25 and absf(r.distance-distance)<1.8 and absf(r.lane-lane)<0.80 and r.stun<=0 and player.recovery_time<=0:
+	if absf(r.ride.y-ride.y)<1.25 and absf(world.route.gap(r.distance,distance))<1.8 and absf(r.lane-lane)<0.80 and r.stun<=0 and player.recovery_time<=0:
 		var bump_side = -1.0 if r.lane>lane else 1.0
 		take_damage(6,"车手擦碰")
 		lane = _clamp_player_lane(lane+bump_side*dt*3)
@@ -659,14 +659,14 @@ func _ai_boost_clear(r: Dictionary) -> bool:
 	var width=minf(world.road_half_width(r.distance),world.road_half_width(r.distance+70))-0.8
 	if absf(r.lane)>width: return false
 	for car in traffic:
-		var ahead=car.distance-r.distance
+		var ahead=world.route.gap(car.distance,r.distance)
 		var horizon=25.0 if active_level<5 else 18.0+maxf(0,r.speed-car.speed)*0.9+car.get("length",4.1)*0.5
 		if ahead> -car.get("length",4.1)*0.5 and ahead<horizon and absf(car.lane-r.lane)<car.get("width",1.95)*0.5+1.0: return false
 	return true
 
 func _choose_ai_lane(r: Dictionary, d: Dictionary) -> float:
 	var preferred = sin(elapsed*0.18+r.phase)*6.5
-	if absf(r.distance-distance)<15 and player.recovery_time<=0:
+	if absf(world.route.gap(r.distance,distance))<15 and player.recovery_time<=0:
 		var spacing = clampf(Weapons.data(r.loadout.current).reach*0.8,2.2,4.3) if active_level==5 else 2.3
 		preferred = clampf(lane+(-spacing if r.id%2==0 else spacing),-7.9,7.9)
 		if active_level>=4 and player.attack_time>0 and r.stun<=0:
@@ -678,14 +678,14 @@ func _choose_ai_lane(r: Dictionary, d: Dictionary) -> float:
 		if absf(candidate)>minf(world.road_half_width(r.distance),world.road_half_width(r.distance+d.lookahead))-0.85: continue
 		var cost = absf(candidate-preferred)*0.35+absf(candidate-r.lane)*0.18
 		for car in traffic:
-			var ahead = car.distance-r.distance
+			var ahead = world.route.gap(car.distance,r.distance)
 			if active_level==5: ahead+=(car.speed-r.speed)*0.55
 			if ahead> -4 and ahead<d.lookahead+maxf(0,r.speed-car.speed)*0.35:
 				cost += maxf(0,car.get("width",1.95)*0.5+1.6-absf(candidate-car.lane))*(6.0 if ahead<25 else 3.0)
 		for other in rivals:
-			if other.id!=r.id and absf(other.distance-r.distance)<7:
+			if other.id!=r.id and absf(world.route.gap(other.distance,r.distance))<7:
 				cost += maxf(0,1.7-absf(candidate-other.lane))*2.5
-		if absf(r.distance-distance)<3: cost += maxf(0,1.3-absf(candidate-lane))*4
+		if absf(world.route.gap(r.distance,distance))<3: cost += maxf(0,1.3-absf(candidate-lane))*4
 		if cost<best_cost:
 			best_cost=cost
 			best=candidate
@@ -695,7 +695,7 @@ func _resolve_ai_attack(r: Dictionary) -> void:
 	if r.stun>0 or r.node.recovery_time>0: return
 	var w=Weapons.data(r.loadout.current)
 	if r.target_id == -1:
-		if Weapons.reaches(w.id,r.lane-lane,r.distance-distance,r.ride.y-ride.y) and player.recovery_time<=0:
+		if Weapons.reaches(w.id,r.lane-lane,world.route.gap(r.distance,distance),r.ride.y-ride.y) and player.recovery_time<=0:
 			r.node.swing(-1 if r.lane>lane else 1)
 			var previous_health=health
 			take_damage(w.rider_damage,"%s · %s"%[r.name,w.name])
@@ -706,7 +706,7 @@ func _resolve_ai_attack(r: Dictionary) -> void:
 				r.attacks += 1
 	elif r.target_id>=0 and r.target_id<rivals.size():
 		var other = rivals[r.target_id]
-		if Weapons.reaches(w.id,r.lane-other.lane,r.distance-other.distance,r.ride.y-other.ride.y) and other.hit_cd<=0 and other.node.recovery_time<=0:
+		if Weapons.reaches(w.id,r.lane-other.lane,world.route.gap(r.distance,other.distance),r.ride.y-other.ride.y) and other.hit_cd<=0 and other.node.recovery_time<=0:
 			var side=1 if other.lane>r.lane else -1
 			r.node.swing(side)
 			other.hp -= w.damage
@@ -716,8 +716,8 @@ func _resolve_ai_attack(r: Dictionary) -> void:
 			other.lane=clampf(other.lane+side*w.shove*0.5,-8.5,8.5)
 			other.node.react_to_hit(side)
 			r.attacks += 1
-			sound.rider_hit(other.id,absf(other.distance-distance),other.hp<=0)
-			if absf(other.distance-distance)<80: fx.burst(other.node.position+Vector3(0,1.5,0),w.color)
+			sound.rider_hit(other.id,absf(world.route.gap(other.distance,distance)),other.hp<=0)
+			if absf(world.route.gap(other.distance,distance))<80: fx.burst(other.node.position+Vector3(0,1.5,0),w.color)
 			if other.hp<=0: _crash_rival(other,side)
 
 func _crash_rival(r: Dictionary, side: float) -> void:
@@ -730,7 +730,7 @@ func _crash_rival(r: Dictionary, side: float) -> void:
 	r.speed *= 0.45
 	r.crashes += 1
 	r.node.begin_crash(side)
-	if absf(r.distance-distance)<90: fx.burst(r.node.position+Vector3(0,0.8,0),Color("ffb865"),true)
+	if absf(world.route.gap(r.distance,distance))<90: fx.burst(r.node.position+Vector3(0,0.8,0),Color("ffb865"),true)
 
 func _simulate_traffic(dt: float, previous_player_distance: float = NAN) -> void:
 	if is_nan(previous_player_distance): previous_player_distance=distance-speed*dt
@@ -834,7 +834,7 @@ func attack(side: int) -> void:
 	var nearest_d = 100.0
 	for r in rivals:
 		var dx = r.lane-lane
-		var dz = absf(r.distance-distance)
+		var dz = absf(world.route.gap(r.distance,distance))
 		if Weapons.reaches(w.id,dx,dz,r.ride.y-ride.y,side) and r.hp>0 and r.hit_cd<=0 and r.node.recovery_time<=0:
 			if dz+absf(dx)<nearest_d:
 				nearest = r
@@ -856,7 +856,7 @@ func attack(side: int) -> void:
 	shake = 0.36
 	flash = 1
 	var heavy = r.hp<=0
-	sound.rider_hit(r.id,absf(r.distance-distance),heavy)
+	sound.rider_hit(r.id,absf(world.route.gap(r.distance,distance)),heavy)
 	fx.burst(r.node.position+Vector3(0,1.6,0),w.color,heavy)
 	if heavy:
 		takedowns += 1
@@ -879,7 +879,7 @@ func _nearest_side() -> int:
 	var closest = 1000.0
 	var side = 1
 	for r in rivals:
-		var delta = absf(r.distance-distance)+absf(r.lane-lane)
+		var delta = absf(world.route.gap(r.distance,distance))+absf(r.lane-lane)
 		if delta<closest and r.hp>0:
 			closest = delta
 			side = -1 if r.lane<lane else 1
@@ -925,7 +925,7 @@ func _update_entities() -> void:
 		r.node.position.y+=r.ride.height
 		r.node.rotation.x=r.ride.pitch
 		r.node.rotation.y = world.relative_yaw(r.distance,distance)
-		r.node.visible = absf(r.distance-distance)<600
+		r.node.visible = absf(world.route.gap(r.distance,distance))<600
 	for car in traffic:
 		car.node.position = world.relative_position(car.lane,car.distance,distance)
 		car.node.rotation.y = world.relative_yaw(car.distance,distance)+(PI if car.get("oncoming",false) else 0)
@@ -1190,7 +1190,7 @@ func _capture() -> void:
 func _autopilot_steer() -> float:
 	var target = sin(elapsed*0.17)*5.5
 	for r in rivals:
-		if absf(r.distance-distance)<8 and r.hp>0:
+		if absf(world.route.gap(r.distance,distance))<8 and r.hp>0:
 			target = r.lane+(-2.0 if r.lane>0 else 2.0)
 			break
 	for car in traffic:

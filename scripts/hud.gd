@@ -593,7 +593,7 @@ func _setup() -> void:
 		_text("%.1f KM"%(Data.race_length(i,game.race_options.get("distance",0))/1000),rect.position+Vector2(263,72),18,MUTED,number_font)
 		_paragraph(course.description,rect.position+Vector2(20,109),240,15,MUTED)
 		_route_preview(i,Rect2(rect.position+Vector2(280,92),Vector2(65,72)))
-		_text(course.subtitle,rect.position+Vector2(20,186),14,course.color)
+		_text(("闭环 · %d 圈 / "%[1,2,4][game.race_options.get("distance",0)] if TrackRoute.PROFILES[i].closed else "单程 · ")+course.subtitle,rect.position+Vector2(20,186),12,course.color)
 		if game.race_options.course==i: _text("已选",rect.position+Vector2(302,36),15,CYAN)
 	_panel(Rect2(889,205,475,443),Color(0.035,0.075,0.13,0.95),10,Color("314653"))
 	_text("AI 参赛车手",Vector2(918,248),21,WHITE)
@@ -689,7 +689,7 @@ func _distance_header() -> void:
 	_text("%.3f KM"%km.travelled_km,Vector2(321,72),31,WHITE,number_font)
 	_text("距终点",Vector2(525,39),13,MUTED)
 	_text("%.3f KM"%km.remaining_km,Vector2(525,72),31,CYAN,number_font)
-	_text("%s %.2f KM / LV.%d"%[Data.DISTANCE_NAMES[game.active_distance],km.total_km,game.active_level],Vector2(740,40),15,MUTED,number_font)
+	_text("%s %.2f KM / LV.%d"%[("%d/%d 圈"%[game.world.route.lap(game.distance),roundi(game.track_length/game.world.route.lap_length)] if game.world.route.closed else Data.DISTANCE_NAMES[game.active_distance]),km.total_km,game.active_level],Vector2(740,40),15,MUTED,number_font)
 	_text("%.1f%%"%km.percent,Vector2(931,71),28,ORANGE,number_font)
 	var a=Vector2(322,86)
 	draw_line(a,a+Vector2(727,0),Color("304a59"),3,true)
@@ -749,7 +749,7 @@ func _minimap() -> void:
 	else: _text("赛道地图",rect.position+Vector2(15,25),16,WHITE)
 	_text(game.controls.label("toggle_map"),rect.position+Vector2(199,25),14,CYAN,number_font)
 	var points = PackedVector2Array()
-	for i in 321: points.append(_map_position(float(i)/320*game.track_length,0,rect))
+	for i in 321: points.append(_map_position(float(i)/320*game.world.route.lap_length,0,rect))
 	draw_polyline(points,Color("294453"),8,true)
 	draw_polyline(points,Color("78959e").lerp(Feedback.RED,f.tint*3),2,true)
 	for r in game.rivals:
@@ -765,7 +765,12 @@ func _minimap() -> void:
 	draw_circle(player_pos,7,INK)
 	draw_circle(player_pos,5,ORANGE)
 	_text("你",player_pos+Vector2(10,5),13,WHITE)
-	_text("FINISH",_map_position(game.track_length,0,rect)+Vector2(-24,-11),12,CYAN,number_font)
+	var finish_label="起/终" if game.world.route.closed else "FINISH"
+	var label_width=body_font.get_string_size(finish_label,HORIZONTAL_ALIGNMENT_LEFT,-1,12).x
+	var finish_pos=_map_position(game.track_length,0,rect)+Vector2(-label_width/2,-11)
+	finish_pos.x=clampf(finish_pos.x,rect.position.x+8,rect.end.x-label_width-8)
+	finish_pos.y=clampf(finish_pos.y,rect.position.y+47,rect.end.y-25)
+	_text(finish_label,finish_pos,12,CYAN)
 	_text("方框：警车 / 橙点：你" if game.police.pursuit_active else "等比路线 / 橙点：你",rect.position+Vector2(15,rect.size.y-15),12,MUTED)
 
 func _map_position(at: float, lane: float, rect: Rect2) -> Vector2:
@@ -781,7 +786,7 @@ func _route_preview(index: int, rect: Rect2) -> void:
 		route_previews[key]=path
 	var path=route_previews[key]
 	var points=PackedVector2Array()
-	for i in 161: points.append(path.project(metres*i/160.0,0,rect))
+	for i in 161: points.append(path.project(path.lap_length*i/160.0,0,rect))
 	draw_polyline(points,Data.COURSES[index].color,2,true)
 	draw_circle(points[0],3,ORANGE)
 	draw_circle(points[-1],3,WHITE)
@@ -795,10 +800,10 @@ func _rear_view() -> void:
 	draw_set_transform(ui_offset,0,Vector2.ONE*ui_scale)
 	var behind: Array[Dictionary] = []
 	for r in game.rivals:
-		if r.distance<game.distance and game.distance-r.distance<160: behind.append(r)
-	behind.sort_custom(func(a,b): return a.distance>b.distance)
+		if game.world.route.gap(r.distance,game.distance)<0 and game.world.route.gap(game.distance,r.distance)<160: behind.append(r)
+	behind.sort_custom(func(a,b): return game.world.route.gap(a.distance,game.distance)>game.world.route.gap(b.distance,game.distance))
 	var label = "后方暂无近距离追兵"
-	if not behind.is_empty(): label = "%s  距离 %dm"%[behind[0].name,game.distance-behind[0].distance]
+	if not behind.is_empty(): label = "%s  距离 %dm"%[behind[0].name,game.world.route.gap(game.distance,behind[0].distance)]
 	_center("REAR VIEW  /  "+label,Vector2(726,249),13,MUTED,body_font)
 
 func _garage() -> void:
