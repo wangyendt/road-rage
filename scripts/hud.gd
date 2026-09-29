@@ -211,14 +211,14 @@ func _race(interactive: bool = true) -> void:
 	# Twin edge wind tunnels: no lines across the central road or rider.
 	if game.boost_visual>0 and game.state=="race" and game.settings.shake:
 		for side in [-1,1]:
-			for i in 22:
+			for i in 42:
 				var travel=fmod(game.elapsed*1.9+i*0.137,1.0)
-				var x=lerpf(345,5,travel) if side<0 else lerpf(1095,1435,travel)
+				var x=lerpf(390,0,travel) if side<0 else lerpf(1050,1440,travel)
 				var y=100+fmod(i*113.0,650)
-				var v=Vector2(side*(32+travel*90),(y-405)*0.18)
+				var v=Vector2(side*(70+travel*220),(y-405)*0.18)
 				var opacity=sin(travel*PI)*game.boost_visual
-				draw_line(Vector2(x,y),Vector2(x,y)+v,Color(CYAN,opacity*0.10),6,true)
-				draw_line(Vector2(x,y),Vector2(x,y)+v,Color(WHITE,opacity*0.45),1.5,true)
+				draw_line(Vector2(x,y),Vector2(x,y)+v,Color(CYAN,opacity*0.23),10,true)
+				draw_line(Vector2(x,y),Vector2(x,y)+v,Color(WHITE,opacity*0.78),2.2,true)
 	_panel(Rect2(32,28,243,97),Color(0.04,0.09,0.15,0.78),7)
 	_text("ROAD RAGE",Vector2(48,61),27,WHITE,title_font)
 	var sectors = ["01 / "+game.world.course.name,"02 / 中段追逐","03 / 终点决战"]
