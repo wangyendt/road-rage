@@ -104,6 +104,8 @@ func build(color: Color, player: bool = false, shape: int = 0) -> void:
 			Geo.wedge(chassis,Vector3(0.62,0.08,0.53),Vector3(side*0.6,1.2,-0.65),dark)
 			Geo.box(chassis,Vector3(0.035,0.06,1.7),Vector3(side*0.44,1.15,-0.25),light)
 		Geo.box(chassis,Vector3(1.35,0.08,0.32),Vector3(0,1.7,0.95),shell)
+	elif shape>=12:
+		_build_premium(shape,shell,dark,steel,light)
 	elif shape>=8:
 		var detail=Node3D.new()
 		detail.name="SuspensionKit%d"%shape
@@ -164,6 +166,48 @@ func build(color: Color, player: bool = false, shape: int = 0) -> void:
 	for part in rider.get_children(): part.position -= Vector3(0,1.4,0.2)
 	rider.position = Vector3(0,1.4,0.2)
 	_apply_view_layers(self)
+
+func _build_premium(shape: int, shell: Material, dark: Material, steel: Material, light: Material) -> void:
+	var kit=Node3D.new()
+	kit.name="PremiumKit%d"%shape
+	chassis.add_child(kit)
+	match shape:
+		12: # Twin intake ducts.
+			for side in [-1,1]:
+				var duct=Geo.cylinder(kit,0.22,0.65,Vector3(side*0.51,1.05,-0.60),shell)
+				duct.rotation.x=PI/2
+				Geo.wedge(kit,Vector3(0.18,0.22,1.1),Vector3(side*0.55,1.25,0.1),dark)
+		13: # Heavy layered side armour and crash frame.
+			for side in [-1,1]:
+				for layer in 2: Geo.box(kit,Vector3(0.22,0.35,1.6-layer*0.2),Vector3(side*(0.51+layer*0.10),0.85+layer*0.3,0.0),shell)
+				Geo.link(kit,Vector3(side*0.78,0.55,-0.8),Vector3(side*0.78,1.3,-0.8),0.13,steel)
+		14: # Three visible power cells.
+			for side in [-1,1]:
+				for cell in 3:
+					Geo.box(kit,Vector3(0.24,0.50,0.27),Vector3(side*0.43,0.95,-0.25+cell*0.35),shell)
+					Geo.box(kit,Vector3(0.025,0.33,0.16),Vector3(side*0.56,0.97,-0.25+cell*0.35),light)
+		15: # Wide swept wings, separate tail fins.
+			for side in [-1,1]:
+				Geo.wedge(kit,Vector3(1.10,0.10,0.90),Vector3(side*0.86,1.18,-0.4),shell)
+				Geo.box(kit,Vector3(0.07,0.5,0.65),Vector3(side*0.40,1.60,0.75),light)
+		16: # Tall rally screen and rugged saddle bags.
+			Geo.box(kit,Vector3(0.65,0.80,0.08),Vector3(0,1.85,-0.75),dark)
+			Geo.wedge(kit,Vector3(0.7,0.14,1.1),Vector3(0,1.19,-0.9),shell)
+			for side in [-1,1]: Geo.box(kit,Vector3(0.38,0.48,0.80),Vector3(side*0.6,1.1,0.58),shell)
+		17: # Long aero tail and front canards.
+			Geo.wedge(kit,Vector3(0.98,0.68,2.2),Vector3(0,1.09,-0.40),shell)
+			Geo.box(kit,Vector3(1.6,0.08,0.48),Vector3(0,1.65,1.25),shell)
+			for side in [-1,1]: Geo.wedge(kit,Vector3(0.65,0.06,0.55),Vector3(side*0.68,1.18,-0.9),dark)
+		18: # Exposed rebound coils and twin rear rockers.
+			for side in [-1,1]:
+				Geo.link(kit,Vector3(side*0.5,0.48,0.92),Vector3(side*0.5,1.40,0.12),0.12,steel)
+				for coil in 9:
+					var ring=Geo.cylinder(kit,0.16,0.045,Vector3(side*0.51,0.62+coil*0.08,0.84-coil*0.07),shell)
+					ring.rotation.x=-0.65
+		19: # Grand-tour race fairing, crown-like triple tail light.
+			Geo.wedge(kit,Vector3(1.05,0.88,1.90),Vector3(0,1.12,-0.38),shell)
+			Geo.box(kit,Vector3(1.45,0.08,0.40),Vector3(0,1.62,1.03),shell)
+			for i in 3: Geo.box(kit,Vector3(0.075,0.16+i%2*0.1,0.06),Vector3((i-1)*0.18,1.68,1.23),light)
 
 func _apply_view_layers(root: Node) -> void:
 	if not is_player: return

@@ -12,7 +12,16 @@ const BIKES = [
 	{"id":"spring","name":"SPRING 弹簧侠","tag":"REBOUND / STUNT","price":6800,"speed":79.0,"boost":108.0,"accel":22.0,"handling":11.5,"armor":0.95,"suspension":36.0,"grip":1.10,"restitution":0.68,"air_control":0.55,"color":Color("ffba58"),"shape":8,"desc":"外露长弹簧。落地连弹更高，需提前留出空中走线。"},
 	{"id":"anvil","name":"ANVIL 镇山","tag":"DAMPING / ARMOR","price":11200,"speed":83.0,"boost":112.0,"accel":19.0,"handling":10.2,"armor":0.64,"suspension":43.0,"grip":1.22,"restitution":0.16,"air_control":0.30,"color":Color("a3b9d2"),"shape":9,"desc":"液压吸震与厚重护板。落地更稳，反弹低，适合陡坡。"},
 	{"id":"kestrel","name":"KESTREL 空隼","tag":"AERO / AIR CONTROL","price":16800,"speed":89.0,"boost":120.0,"accel":26.0,"handling":12.3,"armor":1.08,"suspension":37.0,"grip":1.04,"restitution":0.52,"air_control":0.78,"color":Color("66dced"),"shape":10,"desc":"侧翼与分体尾架。空中转向灵活，中等弹性兼顾飞跃。"},
-	{"id":"rover","name":"ROVER 巡界者","tag":"RALLY / ENDURANCE","price":12600,"speed":85.0,"boost":114.0,"accel":23.0,"handling":11.7,"armor":0.80,"suspension":40.0,"grip":1.30,"restitution":0.38,"air_control":0.48,"color":Color("b3df9b"),"shape":11,"desc":"双后避震和防滚架。碎石抓地更强，长距离起伏稳定。"}
+	{"id":"rover","name":"ROVER 巡界者","tag":"RALLY / ENDURANCE","price":12600,"speed":85.0,"boost":114.0,"accel":23.0,"handling":11.7,"armor":0.80,"suspension":40.0,"grip":1.30,"restitution":0.38,"air_control":0.48,"color":Color("b3df9b"),"shape":11,"desc":"双后避震和防滚架。碎石抓地更强，长距离起伏稳定。"},
+	{"id":"vortex","name":"VORTEX 涡流","tag":"ELITE / SPEED","price":24000,"speed":98.0,"boost":131.0,"accel":29.0,"handling":11.6,"armor":1.16,"suspension":28.0,"grip":1.08,"restitution":0.24,"air_control":0.44,"color":Color("52baff"),"shape":12,"desc":"双涵道竞速整流罩。极速跃升，但薄装甲仍怕硬碰硬。"},
+	{"id":"bastion","name":"BASTION 堡垒","tag":"ELITE / DEFENSE","price":32000,"speed":88.0,"boost":117.0,"accel":19.0,"handling":9.9,"armor":0.48,"suspension":46.0,"grip":1.25,"restitution":0.16,"air_control":0.32,"color":Color("d8b377"),"shape":13,"desc":"双层防撞装甲降低 52% 碰撞伤害；重车身牺牲出弯加速。"},
+	{"id":"pulse","name":"PULSE 脉冲","tag":"ELITE / LAUNCH","price":42000,"speed":92.0,"boost":128.0,"accel":38.0,"handling":13.8,"armor":1.18,"suspension":29.0,"grip":1.18,"restitution":0.28,"air_control":0.50,"color":Color("b1ec69"),"shape":14,"desc":"三组电驱模组，出弯加速极强；高速缠斗需要主动避撞。"},
+	{"id":"ibis","name":"IBIS 翼鹮","tag":"ELITE / FLIGHT","price":52000,"speed":94.0,"boost":129.0,"accel":28.0,"handling":13.6,"armor":1.06,"suspension":46.0,"grip":1.12,"restitution":0.63,"air_control":0.95,"color":Color("8aebed"),"shape":15,"desc":"大展弦双翼与空中控向。高弹性适合连飞，不适合贴地追赶。"},
+	{"id":"dune","name":"DUNE 沙暴","tag":"MASTER / RALLY","price":64000,"speed":92.0,"boost":124.0,"accel":27.0,"handling":13.2,"armor":0.78,"suspension":48.0,"grip":1.55,"restitution":0.40,"air_control":0.58,"color":Color("efbc67"),"shape":16,"desc":"高位拉力车架。湿地与碎石抓地出色，直道极速不是强项。"},
+	{"id":"vector","name":"VECTOR 矢量","tag":"MASTER / HYPER","price":76000,"speed":100.0,"boost":137.0,"accel":32.0,"handling":12.2,"armor":1.22,"suspension":31.0,"grip":1.10,"restitution":0.22,"air_control":0.48,"color":Color("bb99ff"),"shape":17,"desc":"长尾空气动力套件。氮气极速突出，脆弱车身考验避障。"},
+	{"id":"phoenix","name":"PHOENIX 不死鸟","tag":"LEGEND / REBOUND","price":90000,"speed":97.0,"boost":133.0,"accel":30.0,"handling":13.4,"armor":0.82,"suspension":50.0,"grip":1.24,"restitution":0.72,"air_control":0.82,"color":Color("ff966d"),"shape":18,"desc":"高弹性双摇臂，专为陡坡连弹与空中走位；反弹也会延长滞空。"},
+	{"id":"sovereign","name":"SOVEREIGN 王座","tag":"LEGEND / ALL ROUND","price":108000,"speed":104.0,"boost":141.0,"accel":31.0,"handling":12.9,"armor":0.86,"suspension":42.0,"grip":1.24,"restitution":0.32,"air_control":0.65,"color":Color("f4d990"),"shape":19,"desc":"金色全包围整流罩。高价全能旗舰，防护与空控仍不及专项车。"}
+
 
 
 ]
@@ -91,3 +100,16 @@ func load_config(file: ConfigFile) -> void:
 			if id is String and bike(id).id==id and id not in owned: owned.append(id)
 	var chosen=str(file.get_value("career","equipped","rr09"))
 	equipped=chosen if chosen in owned else "rr09"
+
+const RADAR_LABELS=["极速","加速","操控","防护","抓地","空控"]
+static func radar_values(item: Dictionary) -> PackedFloat32Array:
+	return PackedFloat32Array([
+		clampf(inverse_lerp(60.0,110.0,item.speed),0,1),
+		clampf(inverse_lerp(10.0,40.0,item.accel),0,1),
+		clampf(inverse_lerp(8.0,15.0,item.handling),0,1),
+		clampf(inverse_lerp(1.30,0.45,item.armor),0,1),
+		clampf(inverse_lerp(0.70,1.60,item.get("grip",1.0)),0,1),
+		clampf(inverse_lerp(0.20,1.0,item.air_control),0,1)])
+
+static func price_label(item: Dictionary) -> String:
+	return "标价 $%d"%item.price

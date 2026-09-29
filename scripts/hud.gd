@@ -809,7 +809,7 @@ func _rear_view() -> void:
 func _garage() -> void:
 	_shade(0.91)
 	_text("BUILD YOUR LEGACY",Vector2(70,112),55,WHITE,title_font)
-	_text("摩托商店 / 已拥有的车辆可以免费切换",Vector2(73,156),21,CYAN)
+	_text("摩托商店 / 标价永久显示 · 六维统一标尺，越外越强",Vector2(73,156),21,CYAN)
 	_text("钱包 $%d"%game.economy.cash,Vector2(1020,110),29,ORANGE,number_font)
 	_text("待缴罚款 $%d"%game.economy.debt,Vector2(1020,148),18,MUTED)
 	for slot in 4:
@@ -818,9 +818,11 @@ func _garage() -> void:
 		var bike=game.Economy.BIKES[i]
 		var x=72+slot*328
 		var selected_bike=game.economy.equipped==bike.id
-		_panel(Rect2(x,204,306,492),Color("122333"),9,bike.color if selected_bike else Color("304554"))
+		_panel(Rect2(x,204,306,570),Color("122333"),9,bike.color if selected_bike else Color("304554"))
 		_text(bike.tag,Vector2(x+18,238),15,bike.color,number_font)
-		_text(bike.name,Vector2(x+18,275),25,WHITE)
+		_text(bike.name,Vector2(x+18,273),22,WHITE)
+		_text(game.Economy.price_label(bike),Vector2(x+18,301),20,ORANGE,number_font)
+		_text("驾驶中" if selected_bike else ("已拥有" if bike.id in game.economy.owned else "待解锁"),Vector2(x+235,301),13,CYAN if bike.id in game.economy.owned else MUTED)
 		# Original schematic preview; the equipped bike also changes its real 3D model.
 		for wheel_x in [x+69,x+237]:
 			draw_circle(Vector2(wheel_x,367),30,Color("060f18"))
@@ -839,21 +841,46 @@ func _garage() -> void:
 		if i==10: draw_colored_polygon(PackedVector2Array([Vector2(x+148,314),Vector2(x+210,281),Vector2(x+201,326)]),CYAN)
 		if i==11: draw_line(Vector2(x+96,311),Vector2(x+102,291),WHITE,5,true)
 		if i in [3,7]: draw_line(Vector2(x+218,300),Vector2(x+270,300),bike.color,7,true)
-		_text("极速 / 氮气  %d / %d km/h"%[bike.speed*3.6,bike.boost*3.6],Vector2(x+18,426),16,WHITE)
-		_text("加速 %d   操控 %.1f"%[bike.accel,bike.handling],Vector2(x+18,459),17,MUTED)
-		_text("碰撞伤害 %.0f%% / 缓冲 %.0f"%[bike.armor*100,bike.get("suspension",22.0)],Vector2(x+18,488),16,MUTED)
-		_text("反弹系数 %.2f  /  空控 %.0f%%"%[bike.restitution,bike.air_control*100],Vector2(x+18,518),16,CYAN)
-		draw_rect(Rect2(x+18,531,268,4),Color("2a4056"))
-		draw_rect(Rect2(x+18,531,268*bike.restitution/0.8,4),bike.color)
-		_paragraph(bike.desc,Vector2(x+18,557),268,15,MUTED)
+		if i>=12:
+			for stripe in (i-12)%4+1:
+				draw_line(Vector2(x+130+stripe*14,321),Vector2(x+140+stripe*14,342),WHITE,3,true)
+		_bike_radar(bike,Vector2(x+153,486),59)
+		_text("极速 / 氮气  %d / %d km/h"%[bike.speed*3.6,bike.boost*3.6],Vector2(x+18,590),16,WHITE)
+		_text("加速 %d · 操控 %.1f · 伤害 %.0f%%"%[bike.accel,bike.handling,bike.armor*100],Vector2(x+18,615),14,MUTED)
+		_text("反弹 %.2f · 缓冲 %.0f · 空控 %.0f%%"%[bike.restitution,bike.get("suspension",22.0),bike.air_control*100],Vector2(x+18,640),14,CYAN)
+		_paragraph(bike.desc,Vector2(x+18,665),268,14,MUTED)
 		var owned=bike.id in game.economy.owned
-		_button("bike:"+bike.id,"驾驶中" if selected_bike else ("换上这台" if owned else "购买 $%d"%bike.price),Rect2(x+17,620,272,53),selected_bike)
+		var caption="驾驶中" if selected_bike else ("换上这台" if owned else ("购买" if game.economy.cash>=bike.price else "还差 $%d"%(bike.price-game.economy.cash)))
+		_button("bike:"+bike.id,caption,Rect2(x+17,711,272,45),selected_bike)
+
 	_button("bikes_prev","← 上一页",Rect2(846,817,156,55))
 	_text("%d / %d"%[game.bike_page+1,ceili(game.Economy.BIKES.size()/4.0)],Vector2(1030,851),22,CYAN,number_font)
 	_button("bikes_next","更多摩托 →",Rect2(1141,817,220,55))
-	_text(game.garage_message,Vector2(76,739),20,CYAN)
-	_text("名次越高，奖金越多；难度与参赛人数影响奖金。被捕退赛无奖金，欠款从后续奖金优先扣除。",Vector2(76,778),17,MUTED)
+	_text(game.garage_message,Vector2(76,798),17,CYAN)
 	_button("back","返回",Rect2(74,817,260,55),true,"ESC")
+
+func _bike_radar(bike: Dictionary, center: Vector2, radius: float) -> void:
+	var values=game.Economy.radar_values(bike)
+	var outline=PackedVector2Array()
+	var scores=PackedVector2Array()
+	for ring in [0.25,0.5,0.75,1.0]:
+		var polygon=PackedVector2Array()
+		for axis in 6:
+			var direction=Vector2.from_angle(-PI/2+axis*TAU/6)
+			polygon.append(center+direction*radius*ring)
+		polygon.append(polygon[0])
+		draw_polyline(polygon,Color("314b61"),1,true)
+	for axis in 6:
+		var direction=Vector2.from_angle(-PI/2+axis*TAU/6)
+		var edge=center+direction*radius
+		draw_line(center,edge,Color("294052"),1,true)
+		outline.append(edge)
+		scores.append(center+direction*radius*values[axis])
+		_center(game.Economy.RADAR_LABELS[axis],center+direction*(radius+24)+Vector2(0,5),13,MUTED)
+	draw_colored_polygon(scores,Color(bike.color,0.27))
+	scores.append(scores[0])
+	draw_polyline(scores,bike.color,2,true)
+	for point in scores: draw_circle(point,2,bike.color)
 
 func _results_backdrop(t: float, success: bool) -> void:
 	if success:
